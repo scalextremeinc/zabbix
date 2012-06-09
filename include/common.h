@@ -718,7 +718,7 @@ char    *zbx_strdup2(const char *filename, int line, char *old, const char *str)
 							"Something impossible has just happened.",	\
 							__FILE__, __LINE__)
 
-#define MIN_ZABBIX_PORT 1024u
+#define MIN_ZABBIX_PORT 0u
 #define MAX_ZABBIX_PORT 65535u
 
 extern const char	*progname;
