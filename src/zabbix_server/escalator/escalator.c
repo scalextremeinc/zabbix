@@ -1198,7 +1198,6 @@ static void	execute_escalation(DB_ESCALATION *escalation)
 
 static void	process_escalations(int now)
 {
-    return;
 	const char		*__function_name = "process_escalations";
 	DB_RESULT		result;
 	DB_ROW			row;
