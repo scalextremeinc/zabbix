@@ -120,9 +120,9 @@
 #define ON	1
 #define OFF	0
 
-#define	APPLICATION_NAME	"Zabbix Agent"
+#define	APPLICATION_NAME	"Monitor Agent"
 #define	ZABBIX_REVDATE		"21 May 2012"
-#define	ZABBIX_VERSION		"2.0.0"
+#define	ZABBIX_VERSION		"0.9"
 #define	ZABBIX_REVISION		"27675"
 
 #if defined(_WINDOWS)

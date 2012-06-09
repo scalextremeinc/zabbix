@@ -44,9 +44,9 @@ const char	*progname = NULL;
 
 /* Default config file location */
 #ifdef _WINDOWS
-	static char	DEFAULT_CONFIG_FILE[]	= "C:\\zabbix_agentd.conf";
+	static char	DEFAULT_CONFIG_FILE[]	= "C:\\monitord.conf";
 #else
-	static char	DEFAULT_CONFIG_FILE[]	= SYSCONFDIR "/zabbix_agentd.conf";
+	static char	DEFAULT_CONFIG_FILE[]	= "/opt/scalextreme/mitos/storage/monitord.conf";
 #endif
 
 /* application TITLE */
@@ -86,11 +86,11 @@ const char	*help_message[] = {
 	"",
 	"Functions:",
 	"",
-	"  -i --install          Install Zabbix agent as service",
-	"  -d --uninstall        Uninstall Zabbix agent from service",
+	"  -i --install          Install monitor agent as service",
+	"  -d --uninstall        Uninstall monitor agent from service",
 
-	"  -s --start            Start Zabbix agent service",
-	"  -x --stop             Stop Zabbix agent service",
+	"  -s --start            Start monitor agent service",
+	"  -x --stop             Stop monitor agent service",
 
 	"  -m --multiple-agents  Service name will include hostname",
 #endif
@@ -562,8 +562,8 @@ int	MAIN_ZABBIX_ENTRY()
 	else
 		zabbix_open_log(LOG_TYPE_FILE, CONFIG_LOG_LEVEL, CONFIG_LOG_FILE);
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "Starting Zabbix Agent [%s]. Zabbix %s (revision %s).",
-			CONFIG_HOSTNAME, ZABBIX_VERSION, ZABBIX_REVISION);
+	zabbix_log(LOG_LEVEL_INFORMATION, "Starting Monitor Agent [%s]. Monitord %s",
+			CONFIG_HOSTNAME, ZABBIX_VERSION );
 
 	if (0 != CONFIG_PASSIVE_FORKS)
 	{
@@ -690,8 +690,8 @@ void	zbx_on_exit()
 	zbx_sleep(2);	/* wait for all processes to exit */
 #endif
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "Zabbix Agent stopped. Zabbix %s (revision %s).",
-			ZABBIX_VERSION, ZABBIX_REVISION);
+	zabbix_log(LOG_LEVEL_INFORMATION, "Monitor Agent stopped. Monitord %s",
+			ZABBIX_VERSION);
 
 	zabbix_close_log();
 

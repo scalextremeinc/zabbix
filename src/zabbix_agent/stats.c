@@ -257,7 +257,7 @@ ZBX_THREAD_ENTRY(collector_thread, args)
 	free_perf_collector();	/* cpu_collector must be freed before perf_collector is freed */
 #endif
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "zabbix_agentd collector stopped");
+	zabbix_log(LOG_LEVEL_INFORMATION, "monitord collector stopped");
 
 	ZBX_DO_EXIT();
 

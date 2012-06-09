@@ -59,7 +59,7 @@ static VOID WINAPI ServiceCtrlHandler(DWORD ctrlCode)
 	{
 		case SERVICE_CONTROL_STOP:
 		case SERVICE_CONTROL_SHUTDOWN:
-			zabbix_log(LOG_LEVEL_INFORMATION, "Zabbix Agent shutdown requested");
+			zabbix_log(LOG_LEVEL_INFORMATION, "Monitor Agent shutdown requested");
 
 			serviceStatus.dwCurrentState	= SERVICE_STOP_PENDING;
 			serviceStatus.dwWaitHint	= 4000;
@@ -74,8 +74,8 @@ static VOID WINAPI ServiceCtrlHandler(DWORD ctrlCode)
 			serviceStatus.dwCheckPoint	= 0;
 			serviceStatus.dwWin32ExitCode	= 0;
 
-			zabbix_log(LOG_LEVEL_INFORMATION, "Zabbix Agent stopped. Zabbix %s (revision %s).",
-					ZABBIX_VERSION, ZABBIX_REVISION);
+			zabbix_log(LOG_LEVEL_INFORMATION, "Monitor Agent stopped. Monitord %s",
+					ZABBIX_VERSION);
 
 			break;
 		default:
@@ -129,7 +129,7 @@ void	service_start()
 	{
 		if (ERROR_FAILED_SERVICE_CONTROLLER_CONNECT == GetLastError())
 		{
-			zbx_error("\n\n\t!!!ATTENTION!!! Zabbix Agent started as a console application. !!!ATTENTION!!!\n");
+			zbx_error("\n\n\t!!!ATTENTION!!! Monitor Agent started as a console application. !!!ATTENTION!!!\n");
 			MAIN_ZABBIX_ENTRY();
 		}
 		else

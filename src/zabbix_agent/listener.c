@@ -111,7 +111,7 @@ ZBX_THREAD_ENTRY(listener_thread, args)
 			zbx_sleep(1);
 	}
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "zabbix_agentd listener stopped");
+	zabbix_log(LOG_LEVEL_INFORMATION, "monitord listener stopped");
 
 	ZBX_DO_EXIT();
 
