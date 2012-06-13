@@ -78,7 +78,7 @@
 			<Tool
 				Name="VCLinkerTool"
 				AdditionalDependencies="ws2_32.lib pdh.lib psapi.lib odbc32.lib odbccp32.lib Wldap32.lib IPHLPAPI.lib"
-				OutputFile="../../../bin/win32/zabbix_agentd.exe"
+				OutputFile="../../../bin/win32/monitord.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				ProgramDatabaseFile="$(IntDir)\zabbix_agentd.pdb"
@@ -22293,6 +22293,30 @@
 					>
 					<File
 						RelativePath="..\..\..\src\libs\zbxjson\json.c"
+						>
+					</File>
+				</Filter>
+				<Filter
+					Name="zbxalgo"
+					>
+					<File
+						RelativePath="..\..\..\src\libs\zbxalgo\algodefs.c"
+						>
+					</File>
+					<File
+						RelativePath="..\..\..\src\libs\zbxalgo\binaryheap.c"
+						>
+					</File>
+					<File
+						RelativePath="..\..\..\src\libs\zbxalgo\hashmap.c"
+						>
+					</File>
+					<File
+						RelativePath="..\..\..\src\libs\zbxalgo\hashset.c"
+						>
+					</File>
+					<File
+						RelativePath="..\..\..\src\libs\zbxalgo\vector.c"
 						>
 					</File>
 				</Filter>
