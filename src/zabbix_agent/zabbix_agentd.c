@@ -34,6 +34,10 @@
 
 #include "symbols.h"
 
+#include <openssl/x509.h>
+#include <openssl/pem.h>
+#include <openssl/bio.h>
+
 #if defined(ZABBIX_SERVICE)
 #	include "service.h"
 #elif defined(ZABBIX_DAEMON)
@@ -137,6 +141,8 @@ unsigned char	process_type = 255;	/* ZBX_PROCESS_TYPE_UNKNOWN */
 ZBX_THREAD_ACTIVECHK_ARGS	*CONFIG_ACTIVE_ARGS = NULL;
 int				CONFIG_ACTIVE_FORKS = 0;
 int				CONFIG_PASSIVE_FORKS = 3;	/* number of listeners for processing passive checks */
+
+int get_hostname_by_cert( const char * szCertificationPath );
 
 static void	parse_commandline(int argc, char **argv, ZBX_TASK_EX *t)
 {
@@ -485,6 +491,39 @@ static void	zbx_load_config(int requirement)
 
 	parse_cfg_file(CONFIG_FILE, cfg, requirement, ZBX_CFG_STRICT);
 
+#define CERT_FILE "agent.cert"
+#ifndef _WINDOWS
+	char szAuthPath[128];
+	char szTmp[32];
+
+	zbx_snprintf( szTmp, 32,"/proc/%d/exe", getpid() );
+	int bytes = readlink(szTmp, szAuthPath, 128) ;
+	if(bytes >= 0)
+	{
+		char * szExec = NULL;
+		szAuthPath[bytes] = '\0';
+	
+		if( ( szExec = strrchr( szAuthPath, '//' )) != NULL )
+		{
+			memcpy( &szExec[1], CERT_FILE, strlen(CERT_FILE) + 1 );
+			if( get_hostname_by_cert( szAuthPath ) < 0 )
+			{
+				exit( 0 );
+			}
+		}
+		else
+		{
+			printf( ">> Error: strrchr() returns NULL in getting app path.\n" );
+			exit( 0 );
+		}
+	}
+	else
+	{
+		printf( ">> Error: Can not get the file path of the monitord.\n" );
+		exit( 0 );
+	}
+#endif
+
 	set_defaults();
 
 	if (ZBX_CFG_FILE_REQUIRED == requirement && NULL == CONFIG_HOSTS_ALLOWED && 0 != CONFIG_PASSIVE_FORKS)
@@ -790,4 +829,77 @@ int	main(int argc, char **argv)
 	START_MAIN_ZABBIX_ENTRY(CONFIG_ALLOW_ROOT);
 
 	exit(SUCCEED);
+}
+int get_hostname_by_cert( const char * szCertificationPath )
+{
+	X509 *x509;
+	BIO *i = BIO_new(BIO_s_file());
+	BIO *o = NULL;
+	unsigned char szBuf[4096];
+
+	if(BIO_read_filename(i, szCertificationPath ) <= 0)
+	{
+		printf( ">>Monitord: Error- Can not find the certification file. path='%s'\n", szCertificationPath );
+		goto err_cert;
+	}
+	if((x509 = PEM_read_bio_X509_AUX(i, NULL, NULL, NULL)) == NULL) 
+	{
+		printf( ">>Monitord: Error- File format is invalid.\n");
+		goto err_cert;
+	}
+
+	memset( szBuf, 0, 4096 );
+	o = BIO_new(BIO_s_mem());
+
+	if(X509_NAME_print_ex(o,X509_get_subject_name(x509),XN_FLAG_COMPAT, X509_FLAG_COMPAT) < 0)
+	{
+		printf( ">> Monitord : parsing certification failed.\n" );
+		goto err_cert;
+	}
+	else
+	{
+		int nAgentID;
+		int nCompanyID;
+		char szOther[4096];
+		char szHostName[MAX_ZBX_HOSTNAME_LEN];
+
+		nAgentID = 0;
+		nCompanyID = 0;
+		BIO_gets( o, &szBuf[0], 4096);
+		printf( ">> Monitord : parsed certificated subject : %s\n",szBuf );
+		if( sscanf( szBuf, "CN=%d.%d.agent, %s", &nAgentID, &nCompanyID, szOther ) > 0)
+		{
+			if( nAgentID < 1 )
+			{
+				printf( ">> Error : AgentID is %d\n", nAgentID );
+				goto err_cert;
+			}
+			printf( ">> Monitord : AgentID=%d, CompanyID=%d\n", nAgentID, nCompanyID );
+			zbx_snprintf( szHostName, MAX_ZBX_HOSTNAME_LEN, "A%dC%d", nAgentID, nCompanyID );
+			if( CONFIG_HOSTNAME == NULL )
+			{
+				CONFIG_HOSTNAME = zbx_strdup(CONFIG_HOSTNAME, &szHostName[0] );
+				printf( ">>		Host name : NULL to %s\n", CONFIG_HOSTNAME );
+			}
+			else
+			{
+				printf( ">>		Prev Host Name : %s\n", CONFIG_HOSTNAME );
+				zbx_snprintf( CONFIG_HOSTNAME, MAX_ZBX_HOSTNAME_LEN, "%s", szHostName );
+				printf( ">>		To Host Name : %s\n", CONFIG_HOSTNAME );
+			}
+			
+		}
+		else
+		{
+			printf( ">> Monitord: Error : parsing AgendID and CompanyID failed\n" );
+			goto err_cert;
+		}
+	}
+	if( i ) BIO_free( i );
+	if( o )	BIO_free( o );
+	return 0;
+err_cert:
+	if( i ) BIO_free( i );
+	if( o )	BIO_free( o );
+	return -1;
 }
