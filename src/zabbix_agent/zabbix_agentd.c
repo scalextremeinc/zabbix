@@ -421,7 +421,11 @@ fail:
  ******************************************************************************/
 static void	zbx_load_config(int requirement)
 {
+#define CERT_FILE "agent.cert"
 	char	*active_hosts = NULL;
+	char szAuthPath[128];
+	char szTmp[32];
+	char * szExec = NULL;
 
 	struct cfg_line	cfg[] =
 	{
@@ -491,38 +495,34 @@ static void	zbx_load_config(int requirement)
 
 	parse_cfg_file(CONFIG_FILE, cfg, requirement, ZBX_CFG_STRICT);
 
-#define CERT_FILE "agent.cert"
 #ifndef _WINDOWS
-	char szAuthPath[128];
-	char szTmp[32];
-
 	zbx_snprintf( szTmp, 32,"/proc/%d/exe", getpid() );
 	int bytes = readlink(szTmp, szAuthPath, 128) ;
 	if(bytes >= 0)
 	{
-		char * szExec = NULL;
 		szAuthPath[bytes] = '\0';
-	
-		if( ( szExec = strrchr( szAuthPath, '//' )) != NULL )
-		{
-			memcpy( &szExec[1], CERT_FILE, strlen(CERT_FILE) + 1 );
-			if( get_hostname_by_cert( szAuthPath ) < 0 )
-			{
-				exit( 0 );
-			}
-		}
-		else
-		{
-			printf( ">> Error: strrchr() returns NULL in getting app path.\n" );
-			exit( 0 );
-		}
 	}
 	else
 	{
 		printf( ">> Error: Can not get the file path of the monitord.\n" );
 		exit( 0 );
 	}
+#else
+	GetModuleFileName(NULL, szAuthPath, 128 );
 #endif
+	if( ( szExec = strrchr( szAuthPath, '//' )) != NULL )
+	{
+		memcpy( &szExec[1], CERT_FILE, strlen(CERT_FILE) + 1 );
+		if( get_hostname_by_cert( szAuthPath ) < 0 )
+		{
+			exit( 0 );
+		}
+	}
+	else
+	{
+		printf( ">> Error: strrchr() returns NULL in getting app path.\n" );
+		exit( 0 );
+	}
 
 	set_defaults();
 
