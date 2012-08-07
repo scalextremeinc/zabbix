@@ -507,10 +507,12 @@ static void	zbx_load_config(int requirement)
 		printf( ">> Error: Can not get the file path of the monitord.\n" );
 		exit( 0 );
 	}
+	szExec = strrchr( szAuthPath, '/' );
 #else
-	GetModuleFileName(NULL, szAuthPath, 128 );
+	GetModuleFileNameA(NULL, szAuthPath, 128 );
+	szExec = strrchr( szAuthPath, '\\' );
 #endif
-	if( ( szExec = strrchr( szAuthPath, '//' )) != NULL )
+	if( szExec != NULL )
 	{
 		memcpy( &szExec[1], CERT_FILE, strlen(CERT_FILE) + 1 );
 		if( get_hostname_by_cert( szAuthPath ) < 0 )
