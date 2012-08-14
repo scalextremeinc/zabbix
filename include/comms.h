@@ -20,6 +20,10 @@
 #ifndef ZABBIX_COMMS_H
 #define ZABBIX_COMMS_H
 
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 #if defined(_WINDOWS)
 #	if defined(__INT_MAX__) && __INT_MAX__ == 2147483647
 typedef int	ssize_t;
@@ -80,6 +84,12 @@ typedef struct
 	unsigned char	accepted;
 	char		*error;
 	int		timeout;
+	/*
+		for scalextreme agent ssl communication.
+	*/
+	BIO * bio;
+	SSL * ssl;
+	SSL_CTX * ctx;
 }
 zbx_sock_t;
 
@@ -146,3 +156,4 @@ int	zbx_send_response(zbx_sock_t *sock, int result, const char *info, int timeou
 int	zbx_recv_response(zbx_sock_t *sock, char *info, int max_info_len, int timeout);
 
 #endif
+
