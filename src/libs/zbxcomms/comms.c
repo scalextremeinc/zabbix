@@ -257,6 +257,11 @@ int sx_ssl_connect( zbx_sock_t * s, const char * szService )
 	/*
 		ssl for scalextreme
 	*/
+	#define CERT_FILE "agent.cert"
+	char szAuthPath[128];
+	char szTmp[32];
+	char * szExec = NULL;
+
 	BIO * bio;
 	SSL * ssl;
 	SSL_CTX * ctx = NULL;
@@ -266,20 +271,48 @@ int sx_ssl_connect( zbx_sock_t * s, const char * szService )
 	OpenSSL_add_all_algorithms();
 
 	ctx = SSL_CTX_new(SSLv23_client_method());
-	if(! SSL_CTX_load_verify_locations(ctx, "/opt/scalextreme/mitos/agent.cert", NULL))
+
+#ifndef _WINDOWS
+	zbx_snprintf( szTmp, 32,"/proc/%d/exe", getpid() );
+	int bytes = readlink(szTmp, szAuthPath, 128) ;
+	if(bytes >= 0)
 	{
-		/* Handle failed load here */
-		zabbix_log( LOG_LEVEL_ERR,  ">> ssl certification loading failed.\n" );
+		szAuthPath[bytes] = '\0';
 	}
 	else
 	{
-		zabbix_log( LOG_LEVEL_DEBUG, ">> ssl certification loaded successfully.\n" );
+		zabbix_log( LOG_LEVEL_ERR, ">> Error: Can not get the file path of the monitord.\n" );
+		return FAIL;
+	}
+	szExec = strrchr( szAuthPath, '/' );
+#else
+	GetModuleFileNameA(NULL, szAuthPath, 128 );
+	szExec = strrchr( szAuthPath, '\\' );
+#endif
+	if( szExec != NULL )
+	{
+		memcpy( &szExec[1], CERT_FILE, strlen(CERT_FILE) + 1 );
+	}
+	else
+	{
+		zabbix_log( LOG_LEVEL_ERR, "Error: strrchr() returns NULL in getting app path.\n" );
+		return FAIL;
+	}
+
+	if(! SSL_CTX_load_verify_locations(ctx, szAuthPath, NULL))
+	{
+		/* Handle failed load here */
+		zabbix_log( LOG_LEVEL_ERR,  "Error: ssl certification loading failed.\n" );
+	}
+	else
+	{
+		zabbix_log( LOG_LEVEL_DEBUG, "ssl certification loaded successfully.\n" );
 	}
 	bio = BIO_new_ssl_connect(ctx);
 	BIO_get_ssl(bio, &ssl);
 
     if( !ssl ) {
-		zabbix_log( LOG_LEVEL_ERR,"Can't locate SSL pointer\n" );
+		zabbix_log( LOG_LEVEL_ERR,"Error: Can't locate SSL pointer\n" );
 		return FAIL;
 	}
 	SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
