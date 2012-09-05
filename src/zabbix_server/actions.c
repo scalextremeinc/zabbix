@@ -1240,8 +1240,42 @@ void	process_actions(DB_EVENT *event)
 			if (event->source == EVENT_SOURCE_DISCOVERY || event->source == EVENT_SOURCE_AUTO_REGISTRATION)
 				execute_operations(event, actionid);
 		}
-		else if (EVENT_SOURCE_TRIGGERS == event->source)
-			DBstop_escalation(actionid, event->objectid, event->eventid);
+		else if (EVENT_SOURCE_TRIGGERS == event->source) 
+        {
+
+            DB_RESULT   result2;
+            DB_ROW      row2;   
+            DB_CONDITION    condition;
+
+            result2 = DBselect(
+                    "select conditionid,conditiontype,operator,value"
+                    " from conditions"
+                    " where actionid=" ZBX_FS_UI64,
+                    actionid);
+
+            zbx_uint64_t    condition_value;
+            int do_stop=0;
+
+            while (NULL != (row2 = DBfetch(result2)))
+            {       
+                ZBX_STR2UINT64(condition.conditionid, row2[0]);
+                condition.actionid = actionid;
+                condition.conditiontype = atoi(row2[1]);
+                condition.operator = atoi(row2[2]);
+                condition.value = row2[3];
+                ZBX_STR2UINT64(condition_value, condition.value);
+                if (CONDITION_TYPE_TRIGGER == condition.conditiontype 
+                        && condition_value == event->objectid) {
+                    do_stop=1;
+                }       
+            }       
+
+            DBfree_result(result2);
+
+            if (do_stop) {
+                DBstop_escalation(actionid, event->objectid, event->eventid);
+            }       
+        }
 	}
 	DBfree_result(result);
 
