@@ -1004,10 +1004,11 @@ int	check_action_condition(DB_EVENT *event, DB_CONDITION *condition)
  * Author: Alexei Vladishev                                                   *
  *                                                                            *
  ******************************************************************************/
-static int	check_action_conditions(DB_EVENT *event, zbx_uint64_t actionid, unsigned char evaltype, DB_RESULT result)
+static int	check_action_conditions(DB_EVENT *event, zbx_uint64_t actionid, unsigned char evaltype)
 {
 	const char	*__function_name = "check_action_conditions";
 
+    DB_RESULT result;
 	DB_ROW		row;
 	DB_CONDITION	condition;
 
@@ -1015,6 +1016,14 @@ static int	check_action_conditions(DB_EVENT *event, zbx_uint64_t actionid, unsig
 	int		cond, old_type = -1, exit = 0;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s() actionid:" ZBX_FS_UI64, __function_name, actionid);
+
+    result = DBselect(
+            "select conditionid,conditiontype,operator,value"
+            " from conditions"
+            " where actionid=" ZBX_FS_UI64,
+            actionid);
+
+
 
 	while (NULL != (row = DBfetch(result)) && 0 == exit)
 	{
@@ -1074,6 +1083,7 @@ static int	check_action_conditions(DB_EVENT *event, zbx_uint64_t actionid, unsig
 		}
 	}
 
+	DBfree_result(result);
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%s", __function_name, zbx_result_string(ret));
 
 	return ret;
@@ -1225,7 +1235,6 @@ void	process_actions(DB_EVENT *event)
 	" and conditions.actionid=actions.actionid and conditions.value='%d' and conditions.conditiontype=2" DB_NODE,
 	ACTION_STATUS_ACTIVE, event->source, event->objectid, DBnode_local("actions.actionid"));
 
-    DB_RESULT   result2;
 
 	while (NULL != (row = DBfetch(result)))
 	{
@@ -1234,13 +1243,7 @@ void	process_actions(DB_EVENT *event)
 
 	zabbix_log(LOG_LEVEL_INFORMATION, "actionid: %d", actionid);
 
-            result2 = DBselect(
-                    "select conditionid,conditiontype,operator,value"
-                    " from conditions"
-                    " where actionid=" ZBX_FS_UI64,
-                    actionid);
-
-		if (SUCCEED == check_action_conditions(event, actionid, evaltype, result2))
+		if (SUCCEED == check_action_conditions(event, actionid, evaltype))
 		{
 			DBstart_escalation(actionid, event->source == EVENT_SOURCE_TRIGGERS ? event->objectid : 0, event->eventid);
 
@@ -1250,9 +1253,15 @@ void	process_actions(DB_EVENT *event)
 		else if (EVENT_SOURCE_TRIGGERS == event->source) 
         {
 
+            DB_RESULT   result2;
             DB_ROW      row2;   
             DB_CONDITION    condition;
 
+            result2 = DBselect(
+                    "select conditionid,conditiontype,operator,value"
+                    " from conditions"
+                    " where actionid=" ZBX_FS_UI64,
+                    actionid);
 
             zbx_uint64_t    condition_value;
             int do_stop=0;
@@ -1275,9 +1284,10 @@ void	process_actions(DB_EVENT *event)
             if (do_stop) {
                 DBstop_escalation(actionid, event->objectid, event->eventid);
             }       
-        }
 
             DBfree_result(result2);
+        }
+
 	}
 	DBfree_result(result);
 
