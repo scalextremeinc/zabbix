@@ -359,11 +359,7 @@ int sx_ssl_connect( zbx_sock_t * s, const char * szService )
 #if defined(HAVE_IPV6)
 int	zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsigned short port, int timeout)
 {
-	int		ret = FAIL;
-	struct addrinfo	*ai = NULL, hints;
-	struct addrinfo	*ai_bind = NULL;
-	char		service[8];
-	char		szService[64];
+	char		szService[256];
 
 	ZBX_TCP_START();
 
@@ -372,7 +368,7 @@ int	zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsign
 	if (0 != timeout)
 		zbx_tcp_timeout_set(s, timeout);
 
-	zbx_snprintf(szService, sizeof(szService), "%s:%d", ip, port );
+	zbx_snprintf(szService, 256, "%s:%d", ip, port );
 	return sx_ssl_connect( s, szService );
 /*
 	zbx_snprintf(service, sizeof(service), "%d", port);
@@ -439,9 +435,7 @@ out:
 #else
 int	zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsigned short port, int timeout)
 {
-	ZBX_SOCKADDR	servaddr_in, source_addr;
-	struct hostent	*hp;
-	char		szService[64];
+	char		szService[256];
 
 	ZBX_TCP_START();
 
@@ -450,7 +444,7 @@ int	zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsign
 	if (0 != timeout)
 		zbx_tcp_timeout_set(s, timeout);
 
-	zbx_snprintf(szService, sizeof(szService), "%s:%d", ip, port );
+	zbx_snprintf(szService, 256, "%s:%d", ip, port );
 	return sx_ssl_connect( s, szService );
 
 	/*
