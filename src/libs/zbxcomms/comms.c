@@ -252,6 +252,41 @@ static void	zbx_tcp_timeout_cleanup(zbx_sock_t *s)
 	}
 #endif
 }
+
+int resolveDNS( char * szServerName )
+{
+    int status = 0;
+#ifndef _WINDOWS
+    FILE *fp;
+    char szCommand[256];
+    char szResult[256];
+    memset( szResult, 0, 256 );
+
+    zbx_snprintf( szCommand, 256, "ping -c1 %s  | grep \"PING\" | awk {'print $3'}", szServerName );
+    fp = popen( szCommand, "r");
+    if (fp == NULL)
+        return -1;
+    if( fgets(szResult, 256, fp) != NULL)
+    {
+        int nlen = strlen( szResult );
+        if(( szResult[0] == '(' ) && (szResult[nlen-2] == ')') )
+        {
+            memset( szServerName, 0 , 256 );
+            memcpy( (void*)szServerName, (void*)&szResult[1], nlen-3 );
+        }
+        else
+        {
+            zabbix_log( LOG_LEVEL_INFORMATION, ">> %s: %s\n", szCommand, szResult );
+            return -1;
+        }
+    }
+
+    status = pclose(fp);
+#endif
+    return status;
+}
+
+
 int sx_ssl_connect( zbx_sock_t * s, const char * szService )
 {
 	/*
@@ -360,15 +395,20 @@ int sx_ssl_connect( zbx_sock_t * s, const char * szService )
 int	zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsigned short port, int timeout)
 {
 	char		szService[256];
+    char        szServerName[256];
 
-	ZBX_TCP_START();
-
+    ZBX_TCP_START();
 	zbx_tcp_clean(s);
 
 	if (0 != timeout)
 		zbx_tcp_timeout_set(s, timeout);
 
-	zbx_snprintf(szService, 256, "%s:%d", ip, port );
+    zbx_snprintf( szServerName, 256, "%s", ip );
+    if ( resolveDNS( szServerName ) < 0 )
+    {
+        zabbix_log( LOG_LEVEL_INFORMATION, ">> ServerName failed to resolve!: %s\n", ip );
+    }
+    zbx_snprintf(szService, 256, "%s:%d", szServerName, port );
 	return sx_ssl_connect( s, szService );
 /*
 	zbx_snprintf(service, sizeof(service), "%d", port);
@@ -436,15 +476,20 @@ out:
 int	zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsigned short port, int timeout)
 {
 	char		szService[256];
+    char        szServerName[256];
 
-	ZBX_TCP_START();
-
+    ZBX_TCP_START();
 	zbx_tcp_clean(s);
 
 	if (0 != timeout)
 		zbx_tcp_timeout_set(s, timeout);
 
-	zbx_snprintf(szService, 256, "%s:%d", ip, port );
+    zbx_snprintf( szServerName, 256, "%s", ip );
+    if ( resolveDNS( szServerName ) < 0 )
+    {
+        zabbix_log( LOG_LEVEL_INFORMATION, ">> ServerName failed to resolve!: %s\n", ip );
+    }
+    zbx_snprintf(szService, 256, "%s:%d", szServerName, port );
 	return sx_ssl_connect( s, szService );
 
 	/*
@@ -1410,3 +1455,4 @@ int	zbx_tcp_check_security(zbx_sock_t *s, const char *ip_list, int allow_if_empt
 #endif
 	return	FAIL;
 }
+
