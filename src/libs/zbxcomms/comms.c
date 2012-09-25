@@ -262,25 +262,21 @@ int resolveDNS( char * szServerName )
     char szResult[256];
     memset( szResult, 0, 256 );
 
-    zbx_snprintf( szCommand, 256, "ping -c1 %s  | grep \"PING\" | awk {'print $3'}", szServerName );
+    zbx_snprintf( szCommand, 256, "ping -c1 %s  | grep \"PING\"", szServerName );
     fp = popen( szCommand, "r");
     if (fp == NULL)
         return -1;
     if( fgets(szResult, 256, fp) != NULL)
     {
-        int nlen = strlen( szResult );
-        if(( szResult[0] == '(' ) && (szResult[nlen-2] == ')') )
-        {
-            memset( szServerName, 0 , 256 );
-            memcpy( (void*)szServerName, (void*)&szResult[1], nlen-3 );
-        }
-        else
+        char szPattern[128];
+        zbx_snprintf( szPattern, 128, "PING %s (%[^)]", szServerName );
+        if( sscanf( szResult, szPattern, szServerName ) != 1 )
         {
             zabbix_log( LOG_LEVEL_INFORMATION, ">> %s: %s\n", szCommand, szResult );
+            pclose(fp);
             return -1;
         }
     }
-
     status = pclose(fp);
 #endif
     return status;
