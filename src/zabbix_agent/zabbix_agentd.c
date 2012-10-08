@@ -431,7 +431,9 @@ static void	zbx_load_config(int requirement)
 	{
 		/* PARAMETER,			VAR,					TYPE,
 			MANDATORY,	MIN,			MAX */
-		{"Server",			&CONFIG_HOSTS_ALLOWED,			TYPE_STRING,
+		{"Mode",			&CONFIG_MODE,			TYPE_STRING,
+			PARM_OPT,	0,			0},
+        {"Server",			&CONFIG_HOSTS_ALLOWED,			TYPE_STRING,
 			PARM_OPT,	0,			0},
 		{"ServerActive",		&active_hosts,				TYPE_STRING,
 			PARM_OPT,	0,			0},
@@ -541,6 +543,9 @@ static void	zbx_load_config(int requirement)
 
 	if (ZBX_CFG_FILE_REQUIRED == requirement)
 		zbx_validate_config();
+
+    if( CONFIG_MODE == NULL )
+        CONFIG_MODE=zbx_strdup(NULL, "https");
 }
 
 /******************************************************************************

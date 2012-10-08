@@ -32,6 +32,7 @@ extern int	CONFIG_LOG_LEVEL;
 extern int	CONFIG_MAX_LINES_PER_SECOND;
 extern char	**CONFIG_ALIASES;
 extern char	**CONFIG_USER_PARAMETERS;
+extern char *CONFIG_MODE;
 #ifdef _WINDOWS
 extern char	**CONFIG_PERF_COUNTERS;
 #endif

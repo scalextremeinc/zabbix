@@ -22,6 +22,7 @@
 #include "log.h"
 
 extern char	*CONFIG_HOSTNAME;
+extern char *CONFIG_MODE;
 
 #if defined(HAVE_IPV6)
 #	define ZBX_SOCKADDR struct sockaddr_storage
@@ -390,156 +391,182 @@ int sx_ssl_connect( zbx_sock_t * s, const char * szService )
 #if defined(HAVE_IPV6)
 int	zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsigned short port, int timeout)
 {
-	char		szService[256];
-    char        szServerName[256];
-
-    ZBX_TCP_START();
-	zbx_tcp_clean(s);
-
-	if (0 != timeout)
-		zbx_tcp_timeout_set(s, timeout);
-
-    zbx_snprintf( szServerName, 256, "%s", ip );
-    if ( resolveDNS( szServerName ) < 0 )
+    if( strcmp(CONFIG_MODE, "https") == 0 )
     {
-        zabbix_log( LOG_LEVEL_INFORMATION, ">> ServerName failed to resolve!: %s\n", ip );
+        char		szService[256];
+        char        szServerName[256];
+
+        ZBX_TCP_START();
+        zbx_tcp_clean(s);
+
+        if (0 != timeout)
+            zbx_tcp_timeout_set(s, timeout);
+
+        zbx_snprintf( szServerName, 256, "%s", ip );
+        if ( resolveDNS( szServerName ) < 0 )
+        {
+            zabbix_log( LOG_LEVEL_INFORMATION, ">> ServerName failed to resolve!: %s\n", ip );
+        }
+        zbx_snprintf(szService, 256, "%s:%d", szServerName, port );
+        return sx_ssl_connect( s, szService );
     }
-    zbx_snprintf(szService, 256, "%s:%d", szServerName, port );
-	return sx_ssl_connect( s, szService );
-/*
-	zbx_snprintf(service, sizeof(service), "%d", port);
-	memset(&hints, 0x00, sizeof(struct addrinfo));
-	hints.ai_family = PF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
+    else
+    {
+        int		ret = FAIL;
+        struct addrinfo	*ai = NULL, hints;
+        struct addrinfo	*ai_bind = NULL;
+        char		service[8];
 
-	if (0 != getaddrinfo(ip, service, &hints, &ai))
-	{
-		zbx_set_tcp_strerror("cannot resolve [%s]", ip);
-		goto out;
-	}
+        ZBX_TCP_START();
 
-	if (ZBX_SOCK_ERROR == (s->socket = socket(ai->ai_family, ai->ai_socktype | SOCK_CLOEXEC, ai->ai_protocol)))
-	{
-		zbx_set_tcp_strerror("cannot create socket [[%s]:%d]: %s", ip, port, strerror_from_system(zbx_sock_last_error()));
-		goto out;
-	}
+        zbx_tcp_clean(s);
 
-#if !defined(_WINDOWS) && !SOCK_CLOEXEC
-	fcntl(s->socket, F_SETFD, FD_CLOEXEC);
-#endif
+        zbx_snprintf(service, sizeof(service), "%d", port);
+        memset(&hints, 0x00, sizeof(struct addrinfo));
+        hints.ai_family = PF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
 
-	if (NULL != source_ip)
-	{
-		memset(&hints, 0x00, sizeof(struct addrinfo));
-		hints.ai_family = PF_UNSPEC;
-		hints.ai_socktype = SOCK_STREAM;
-		hints.ai_flags = AI_NUMERICHOST;
+        if (0 != getaddrinfo(ip, service, &hints, &ai))
+        {
+            zbx_set_tcp_strerror("cannot resolve [%s]", ip);
+            goto out;
+        }
 
-		if (0 != getaddrinfo(source_ip, NULL, &hints, &ai_bind))
-		{
-			zbx_set_tcp_strerror("invalid source IP address [%s]", source_ip);
-			goto out;
-		}
+        if (ZBX_SOCK_ERROR == (s->socket = socket(ai->ai_family, ai->ai_socktype | SOCK_CLOEXEC, ai->ai_protocol)))
+        {
+            zbx_set_tcp_strerror("cannot create socket [[%s]:%d]: %s", ip, port, strerror_from_system(zbx_sock_last_error()));
+            goto out;
+        }
 
-		if (ZBX_TCP_ERROR == bind(s->socket, ai_bind->ai_addr, ai_bind->ai_addrlen))
-		{
-			zbx_set_tcp_strerror("bind() failed: %s", strerror_from_system(zbx_sock_last_error()));
-			goto out;
-		}
-	}
+    #if !defined(_WINDOWS) && !SOCK_CLOEXEC
+        fcntl(s->socket, F_SETFD, FD_CLOEXEC);
+    #endif
 
-	if (0 != timeout)
-		zbx_tcp_timeout_set(s, timeout);
+        if (NULL != source_ip)
+        {
+            memset(&hints, 0x00, sizeof(struct addrinfo));
+            hints.ai_family = PF_UNSPEC;
+            hints.ai_socktype = SOCK_STREAM;
+            hints.ai_flags = AI_NUMERICHOST;
 
-	if (ZBX_TCP_ERROR == connect(s->socket, ai->ai_addr, ai->ai_addrlen))
-	{
-		zbx_set_tcp_strerror("cannot connect to [[%s]:%d]: %s", ip, port, strerror_from_system(zbx_sock_last_error()));
-		zbx_tcp_close(s);
-		goto out;
-	}
+            if (0 != getaddrinfo(source_ip, NULL, &hints, &ai_bind))
+            {
+                zbx_set_tcp_strerror("invalid source IP address [%s]", source_ip);
+                goto out;
+            }
 
-	ret = SUCCEED;
-out:
-	if (NULL != ai)
-		freeaddrinfo(ai);
+            if (ZBX_TCP_ERROR == bind(s->socket, ai_bind->ai_addr, ai_bind->ai_addrlen))
+            {
+                zbx_set_tcp_strerror("bind() failed: %s", strerror_from_system(zbx_sock_last_error()));
+                goto out;
+            }
+        }
 
-	if (NULL != ai_bind)
-		freeaddrinfo(ai_bind);
+        if (0 != timeout)
+            zbx_tcp_timeout_set(s, timeout);
 
-	return ret;*/
+        if (ZBX_TCP_ERROR == connect(s->socket, ai->ai_addr, ai->ai_addrlen))
+        {
+            zbx_set_tcp_strerror("cannot connect to [[%s]:%d]: %s", ip, port, strerror_from_system(zbx_sock_last_error()));
+            zbx_tcp_close(s);
+            goto out;
+        }
+
+        ret = SUCCEED;
+    out:
+        if (NULL != ai)
+            freeaddrinfo(ai);
+
+        if (NULL != ai_bind)
+            freeaddrinfo(ai_bind);
+
+        return ret;
+    }
+    return SUCCEED;
 }
 #else
 int	zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsigned short port, int timeout)
 {
-	char		szService[256];
-    char        szServerName[256];
-
-    ZBX_TCP_START();
-	zbx_tcp_clean(s);
-
-	if (0 != timeout)
-		zbx_tcp_timeout_set(s, timeout);
-
-    zbx_snprintf( szServerName, 256, "%s", ip );
-    if ( resolveDNS( szServerName ) < 0 )
+    if( strcmp(CONFIG_MODE, "https") == 0 )
     {
-        zabbix_log( LOG_LEVEL_INFORMATION, ">> ServerName failed to resolve!: %s\n", ip );
+        char		szService[256];
+        char        szServerName[256];
+
+        ZBX_TCP_START();
+        zbx_tcp_clean(s);
+
+        if (0 != timeout)
+            zbx_tcp_timeout_set(s, timeout);
+
+        zbx_snprintf( szServerName, 256, "%s", ip );
+        if ( resolveDNS( szServerName ) < 0 )
+        {
+            zabbix_log( LOG_LEVEL_INFORMATION, ">> ServerName failed to resolve!: %s\n", ip );
+        }
+        zbx_snprintf(szService, 256, "%s:%d", szServerName, port );
+        return sx_ssl_connect( s, szService );
     }
-    zbx_snprintf(szService, 256, "%s:%d", szServerName, port );
-	return sx_ssl_connect( s, szService );
+    else
+    {
+        ZBX_SOCKADDR	servaddr_in, source_addr;
+        struct hostent	*hp;
 
-	/*
+        ZBX_TCP_START();
 
-	if (NULL == (hp = gethostbyname(ip)))
-	{
-#if defined(_WINDOWS)
-		zbx_set_tcp_strerror("gethostbyname() failed for '%s': %s", ip, strerror_from_system(WSAGetLastError()));
-#elif defined(HAVE_HSTRERROR)
-		zbx_set_tcp_strerror("gethostbyname() failed for '%s': [%d] %s", ip, h_errno, hstrerror(h_errno));
-#else
-		zbx_set_tcp_strerror("gethostbyname() failed for '%s': [%d]", ip, h_errno);
-#endif
-		return FAIL;
-	}
+        zbx_tcp_clean(s);
 
-	servaddr_in.sin_family		= AF_INET;
-	servaddr_in.sin_addr.s_addr	= ((struct in_addr *)(hp->h_addr))->s_addr;
-	servaddr_in.sin_port		= htons(port);
+        if (NULL == (hp = gethostbyname(ip)))
+        {
+    #if defined(_WINDOWS)
+            zbx_set_tcp_strerror("gethostbyname() failed for '%s': %s", ip, strerror_from_system(WSAGetLastError()));
+    #elif defined(HAVE_HSTRERROR)
+            zbx_set_tcp_strerror("gethostbyname() failed for '%s': [%d] %s", ip, h_errno, hstrerror(h_errno));
+    #else
+            zbx_set_tcp_strerror("gethostbyname() failed for '%s': [%d]", ip, h_errno);
+    #endif
+            return FAIL;
+        }
 
-	if (ZBX_SOCK_ERROR == (s->socket = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0)))
-	{
-		zbx_set_tcp_strerror("cannot create socket [[%s]:%d]: %s", ip, port, strerror_from_system(zbx_sock_last_error()));
-		return FAIL;
-	}
+        servaddr_in.sin_family		= AF_INET;
+        servaddr_in.sin_addr.s_addr	= ((struct in_addr *)(hp->h_addr))->s_addr;
+        servaddr_in.sin_port		= htons(port);
 
-#if !defined(_WINDOWS) && !SOCK_CLOEXEC
-	fcntl(s->socket, F_SETFD, FD_CLOEXEC);
-#endif
+        if (ZBX_SOCK_ERROR == (s->socket = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0)))
+        {
+            zbx_set_tcp_strerror("cannot create socket [[%s]:%d]: %s", ip, port, strerror_from_system(zbx_sock_last_error()));
+            return FAIL;
+        }
 
-	if (NULL != source_ip)
-	{
-		source_addr.sin_family		= AF_INET;
-		source_addr.sin_addr.s_addr	= inet_addr(source_ip);
-		source_addr.sin_port		= 0;
+    #if !defined(_WINDOWS) && !SOCK_CLOEXEC
+        fcntl(s->socket, F_SETFD, FD_CLOEXEC);
+    #endif
 
-		if (ZBX_TCP_ERROR == bind(s->socket, (struct sockaddr *)&source_addr, sizeof(source_addr)))
-		{
-			zbx_set_tcp_strerror("bind() failed: %s", strerror_from_system(zbx_sock_last_error()));
-			return FAIL;
-		}
-	}
+        if (NULL != source_ip)
+        {
+            source_addr.sin_family		= AF_INET;
+            source_addr.sin_addr.s_addr	= inet_addr(source_ip);
+            source_addr.sin_port		= 0;
 
-	if (0 != timeout)
-		zbx_tcp_timeout_set(s, timeout);
+            if (ZBX_TCP_ERROR == bind(s->socket, (struct sockaddr *)&source_addr, sizeof(source_addr)))
+            {
+                zbx_set_tcp_strerror("bind() failed: %s", strerror_from_system(zbx_sock_last_error()));
+                return FAIL;
+            }
+        }
 
-	if (ZBX_TCP_ERROR == connect(s->socket, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in)))
-	{
-		zbx_set_tcp_strerror("cannot connect to [[%s]:%d]: %s", ip, port, strerror_from_system(zbx_sock_last_error()));
-		zbx_tcp_close(s);
-		return FAIL;
-	}
+        if (0 != timeout)
+            zbx_tcp_timeout_set(s, timeout);
 
-	return SUCCEED;*/
+        if (ZBX_TCP_ERROR == connect(s->socket, (struct sockaddr *)&servaddr_in, sizeof(servaddr_in)))
+        {
+            zbx_set_tcp_strerror("cannot connect to [[%s]:%d]: %s", ip, port, strerror_from_system(zbx_sock_last_error()));
+            zbx_tcp_close(s);
+            return FAIL;
+        }
+
+        return SUCCEED;     
+    }
+	return SUCCEED;
 }
 #endif	/* HAVE_IPV6 */
 
@@ -563,116 +590,124 @@ int	zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsign
 
 int	zbx_tcp_send_ext(zbx_sock_t *s, const char *data, unsigned char flags, int timeout)
 {
-	zbx_uint64_t	len64;
-	ssize_t		i = 0, written = 0;
-	int		ret = SUCCEED;
+    if( strcmp(CONFIG_MODE, "https") == 0 )
+    {
+        zbx_uint64_t	len64;
+        ssize_t		i = 0, written = 0;
+        int		ret = SUCCEED;
 
 
-	char * szSXdata = NULL;
-	int nLen = strlen( data );
+        char * szSXdata = NULL;
+        int nLen = strlen( data );
 
-	szSXdata = (char *)calloc( 1, nLen+1024 );
-	if( strstr( data, "active checks" ) != NULL )
-	{
-		zbx_snprintf( szSXdata, nLen + 1024,
-			"POST /agents/checks HTTP/1.1\r\n"
-			"User-Agent: Mozilla/4.0\r\n"
-			"Host: 108.166.56.222\r\n"
-			"Accept: application/json\r\n"
-			"Sxhost: %s\r\n"
-			"Type: External\r\n"
-			"Content-Length: %d\r\n"
-			"Content-Type: application/json\r\n\r\n%s",
-			CONFIG_HOSTNAME,
-			nLen,
-			data
-			);
-	}
-	else
-	{
-		zbx_snprintf( szSXdata, nLen + 1024,
-			"POST /agents/data HTTP/1.1\r\n"
-			"User-Agent: Mozilla/4.0\r\n"
-			"Host: 108.166.56.222\r\n"
-			"Accept: application/json\r\n"
-			"Sxhost: %s\r\n"
-			"Type: External\r\n"
-			"Content-Length: %d\r\n"
-			"Content-Type: application/json\r\n\r\n%s",
-			CONFIG_HOSTNAME,
-			nLen,
-			data
-			);
-	}
+        szSXdata = (char *)calloc( 1, nLen+1024 );
+        if( strstr( data, "active checks" ) != NULL )
+        {
+            zbx_snprintf( szSXdata, nLen + 1024,
+                "POST /agents/checks HTTP/1.1\r\n"
+                "User-Agent: Mozilla/4.0\r\n"
+                "Host: 108.166.56.222\r\n"
+                "Accept: application/json\r\n"
+                "Sxhost: %s\r\n"
+                "Type: External\r\n"
+                "Content-Length: %d\r\n"
+                "Content-Type: application/json\r\n\r\n%s",
+                CONFIG_HOSTNAME,
+                nLen,
+                data
+                );
+        }
+        else
+        {
+            zbx_snprintf( szSXdata, nLen + 1024,
+                "POST /agents/data HTTP/1.1\r\n"
+                "User-Agent: Mozilla/4.0\r\n"
+                "Host: 108.166.56.222\r\n"
+                "Accept: application/json\r\n"
+                "Sxhost: %s\r\n"
+                "Type: External\r\n"
+                "Content-Length: %d\r\n"
+                "Content-Type: application/json\r\n\r\n%s",
+                CONFIG_HOSTNAME,
+                nLen,
+                data
+                );
+        }
 
-	ZBX_TCP_START();
+        ZBX_TCP_START();
 
-	if (0 != timeout)
-		zbx_tcp_timeout_set(s, timeout);
+        if (0 != timeout)
+            zbx_tcp_timeout_set(s, timeout);
 
-	zabbix_log( LOG_LEVEL_DEBUG, ">> Data to send: %s", szSXdata );
-	//printf( ">> ZBX Header: %s\n", ZBX_TCP_HEADER );
-	//printf( ">> Data to send: %s\n", data );
-    /*
-	if (0 != (flags & ZBX_TCP_PROTOCOL))
-	{
-		if (ZBX_TCP_ERROR == ZBX_TCP_WRITE(s->socket, ZBX_TCP_HEADER, ZBX_TCP_HEADER_LEN))
-		{
-			zbx_set_tcp_strerror("ZBX_TCP_WRITE() failed: %s", strerror_from_system(zbx_sock_last_error()));
-			ret = FAIL;
-			goto cleanup;
-		}
+        zabbix_log( LOG_LEVEL_DEBUG, ">> Data to send: %s", szSXdata );
+        nLen = strlen(szSXdata);
+        if( !s->bio || BIO_write(s->bio, szSXdata, nLen ) == ZBX_TCP_ERROR )
+        {		
+                if( !s->bio )
+                    zbx_set_tcp_strerror("BIO_write() failed: bio is NULL." );
+                else
+                    zbx_set_tcp_strerror("BIO_write() failed: %s", ERR_reason_error_string(ERR_get_error()));
+                ret = FAIL;
+                goto cleanup1;
+        }
+        zabbix_log( LOG_LEVEL_DEBUG, ">> Monitord: Send up." );
+    cleanup1:
+        if (0 != timeout)
+            zbx_tcp_timeout_cleanup(s);
 
-		len64 = (zbx_uint64_t)strlen(data);
-		len64 = zbx_htole_uint64(len64);
+        zbx_free( szSXdata );
+        return ret;
+    }
+    else
+    {
+        zbx_uint64_t	len64;
+        ssize_t		i = 0, written = 0;
+        int		ret = SUCCEED;
 
-		if (ZBX_TCP_ERROR == ZBX_TCP_WRITE(s->socket, (char *)&len64, sizeof(len64)))
-		{
-			zbx_set_tcp_strerror("ZBX_TCP_WRITE() failed: %s", strerror_from_system(zbx_sock_last_error()));
-			ret = FAIL;
-			goto cleanup;
-		}
-	}
-	
-	while (written < (ssize_t)strlen(data))
-	{
-		if (ZBX_TCP_ERROR == (i = ZBX_TCP_WRITE(s->socket, data + written, (int)(strlen(data) - written))))
-		{
-			zbx_set_tcp_strerror("ZBX_TCP_WRITE() failed: %s", strerror_from_system(zbx_sock_last_error()));
-			ret = FAIL;
-			goto cleanup;
-		}
-		written += i;
-	}*/
-	nLen = strlen(szSXdata);
-	if( !s->bio || BIO_write(s->bio, szSXdata, nLen ) == ZBX_TCP_ERROR )
-	{		
-			if( !s->bio )
-				zbx_set_tcp_strerror("BIO_write() failed: bio is NULL." );
-			else
-				zbx_set_tcp_strerror("BIO_write() failed: %s", ERR_reason_error_string(ERR_get_error()));
-			ret = FAIL;
-			goto cleanup;
-	}
-/*	while (written < (ssize_t)nLen)
-	{
-		//if (ZBX_TCP_ERROR == (i = ZBX_TCP_WRITE(s->socket, szSXdata + written, (int)(nLen - written))))
-		if (ZBX_TCP_ERROR == (i = BIO_write(s->bio, szSXdata + written, (int)(nLen - written))))
-		{
-			//zbx_set_tcp_strerror("ZBX_TCP_WRITE() failed: %s", strerror_from_system(zbx_sock_last_error()));
-			zbx_set_tcp_strerror("ZBX_BIO_WRITE() failed: %s", strerror_from_system(zbx_sock_last_error()));
-			ret = FAIL;
-			goto cleanup;
-		}
-		written += i;
-	}*/
-	zabbix_log( LOG_LEVEL_DEBUG, ">> Monitord: Send up." );
-cleanup:
-	if (0 != timeout)
-		zbx_tcp_timeout_cleanup(s);
+        ZBX_TCP_START();
 
-	zbx_free( szSXdata );
-	return ret;
+        if (0 != timeout)
+            zbx_tcp_timeout_set(s, timeout);
+
+        if (0 != (flags & ZBX_TCP_PROTOCOL))
+        {
+            /* write header */
+            if (ZBX_TCP_ERROR == ZBX_TCP_WRITE(s->socket, ZBX_TCP_HEADER, ZBX_TCP_HEADER_LEN))
+            {
+                zbx_set_tcp_strerror("ZBX_TCP_WRITE() failed: %s", strerror_from_system(zbx_sock_last_error()));
+                ret = FAIL;
+                goto cleanup;
+            }
+
+            len64 = (zbx_uint64_t)strlen(data);
+            len64 = zbx_htole_uint64(len64);
+
+            /* write data length */
+            if (ZBX_TCP_ERROR == ZBX_TCP_WRITE(s->socket, (char *)&len64, sizeof(len64)))
+            {
+                zbx_set_tcp_strerror("ZBX_TCP_WRITE() failed: %s", strerror_from_system(zbx_sock_last_error()));
+                ret = FAIL;
+                goto cleanup;
+            }
+        }
+
+        while (written < (ssize_t)strlen(data))
+        {
+            if (ZBX_TCP_ERROR == (i = ZBX_TCP_WRITE(s->socket, data + written, (int)(strlen(data) - written))))
+            {
+                zbx_set_tcp_strerror("ZBX_TCP_WRITE() failed: %s", strerror_from_system(zbx_sock_last_error()));
+                ret = FAIL;
+                goto cleanup;
+            }
+            written += i;
+        }
+    cleanup:
+        if (0 != timeout)
+            zbx_tcp_timeout_cleanup(s);
+
+        return ret;
+    }
+    return FAIL;
 }
 
 /******************************************************************************
@@ -1123,146 +1158,279 @@ void	zbx_tcp_free(zbx_sock_t *s)
 ssize_t	zbx_tcp_recv_ext(zbx_sock_t *s, char **data, unsigned char flags, int timeout)
 {
 #define ZBX_BUF_LEN	ZBX_STAT_BUF_LEN * 8
-	ssize_t		nbytes, left, read_bytes, total_bytes;
-	size_t		allocated, offset;
-	zbx_uint64_t	expected_len;
 
-	ZBX_TCP_START();
+    if( strcmp(CONFIG_MODE, "https") == 0  )
+    {
+        ssize_t		nbytes, left, read_bytes, total_bytes;
+        size_t		allocated, offset;
+        zbx_uint64_t	expected_len;
 
-	if (0 != timeout)
-		zbx_tcp_timeout_set(s, timeout);
+        ZBX_TCP_START();
 
-	zbx_free(s->buf_dyn);
+        if (0 != timeout)
+            zbx_tcp_timeout_set(s, timeout);
 
-	total_bytes = 0;
-	read_bytes = 0;
-	s->buf_type = ZBX_BUF_TYPE_STAT;
+        zbx_free(s->buf_dyn);
 
-	*data = s->buf_stat;
+        total_bytes = 0;
+        read_bytes = 0;
+        s->buf_type = ZBX_BUF_TYPE_STAT;
 
-	left = ZBX_TCP_HEADER_LEN;
-	//nbytes = ZBX_TCP_READ(s->socket, s->buf_stat, left);
-	nbytes = BIO_read(s->bio, s->buf_stat, left);
+        *data = s->buf_stat;
 
-	if (ZBX_TCP_HEADER_LEN == nbytes && 0 == strncmp(s->buf_stat, ZBX_TCP_HEADER, ZBX_TCP_HEADER_LEN))
-	{
-		total_bytes += nbytes;
+        left = ZBX_TCP_HEADER_LEN;
+        //nbytes = ZBX_TCP_READ(s->socket, s->buf_stat, left);
+        nbytes = BIO_read(s->bio, s->buf_stat, left);
 
-		left = sizeof(zbx_uint64_t);	
-		nbytes = BIO_read(s->bio, (void *)&expected_len, left);
-		expected_len = zbx_letoh_uint64(expected_len);
+        if (ZBX_TCP_HEADER_LEN == nbytes && 0 == strncmp(s->buf_stat, ZBX_TCP_HEADER, ZBX_TCP_HEADER_LEN))
+        {
+            total_bytes += nbytes;
 
-		flags |= ZBX_TCP_READ_UNTIL_CLOSE;
-	}
-	else if (ZBX_TCP_ERROR != nbytes)
-	{
-		read_bytes = nbytes;
-		expected_len = 16 * ZBX_MEBIBYTE;
-	}
+            left = sizeof(zbx_uint64_t);	
+            nbytes = BIO_read(s->bio, (void *)&expected_len, left);
+            expected_len = zbx_letoh_uint64(expected_len);
 
-	if (ZBX_TCP_ERROR != nbytes)
-	{
-		s->buf_stat[read_bytes] = '\0';
+            flags |= ZBX_TCP_READ_UNTIL_CLOSE;
+        }
+        else if (ZBX_TCP_ERROR != nbytes)
+        {
+            read_bytes = nbytes;
+            expected_len = 16 * ZBX_MEBIBYTE;
+        }
 
-		if (0 != (flags & ZBX_TCP_READ_UNTIL_CLOSE))
-		{
-			if (0 == nbytes)
-				goto cleanup;
-		}
-		else
-		{
-			if (nbytes < left)
-				goto cleanup;
-		}
+        if (ZBX_TCP_ERROR != nbytes)
+        {
+            s->buf_stat[read_bytes] = '\0';
 
-		left = sizeof(s->buf_stat) - read_bytes - 1;
+            if (0 != (flags & ZBX_TCP_READ_UNTIL_CLOSE))
+            {
+                if (0 == nbytes)
+                    goto cleanup1;
+            }
+            else
+            {
+                if (nbytes < left)
+                    goto cleanup1;
+            }
 
-		/* check for an empty socket if exactly ZBX_TCP_HEADER_LEN bytes (without a header) were sent */
-		if (0 == read_bytes || '\n' != s->buf_stat[read_bytes - 1])	/* requests to passive agents end with '\n' */
-		{
-			/* fill static buffer */
-			while (read_bytes < expected_len && 0 < left &&
-					ZBX_TCP_ERROR != (nbytes = BIO_read(s->bio, s->buf_stat + read_bytes, left)))
-			{
-				read_bytes += nbytes;
+            left = sizeof(s->buf_stat) - read_bytes - 1;
 
-				if (0 != (flags & ZBX_TCP_READ_UNTIL_CLOSE))
-				{
-					if (0 == nbytes)
-						break;
-				}
-				else
-				{
-					if (nbytes < left)
-						break;
-				}
+            /* check for an empty socket if exactly ZBX_TCP_HEADER_LEN bytes (without a header) were sent */
+            if (0 == read_bytes || '\n' != s->buf_stat[read_bytes - 1])	/* requests to passive agents end with '\n' */
+            {
+                /* fill static buffer */
+                while (read_bytes < expected_len && 0 < left &&
+                        ZBX_TCP_ERROR != (nbytes = BIO_read(s->bio, s->buf_stat + read_bytes, left)))
+                {
+                    read_bytes += nbytes;
 
-				left -= nbytes;
-			}
-		}
-		
-		s->buf_stat[read_bytes] = '\0';
-		/*
-			scalextreme.com
-		*/
-		if( strncmp( &s->buf_stat[0], "HTTP/1.1 200 OK", 15 ) == 0 )
-		{
-			*data = strstr( &s->buf_stat[0], "\r\n\r\n" ) + 4;
-		}
-		if( sizeof(s->buf_stat) - 1 != read_bytes )
-			zabbix_log( LOG_LEVEL_DEBUG, ">> recv buff: %s\n", *data );
+                    if (0 != (flags & ZBX_TCP_READ_UNTIL_CLOSE))
+                    {
+                        if (0 == nbytes)
+                            break;
+                    }
+                    else
+                    {
+                        if (nbytes < left)
+                            break;
+                    }
 
-		if (sizeof(s->buf_stat) - 1 == read_bytes)	/* static buffer is full */
-		{
-			allocated = ZBX_BUF_LEN;
-			s->buf_type = ZBX_BUF_TYPE_DYN;
-			s->buf_dyn = zbx_malloc(s->buf_dyn, allocated);
+                    left -= nbytes;
+                }
+            }
+            
+            s->buf_stat[read_bytes] = '\0';
+            /*
+                scalextreme.com
+            */
+            if( strncmp( &s->buf_stat[0], "HTTP/1.1 200 OK", 15 ) == 0 )
+            {
+                *data = strstr( &s->buf_stat[0], "\r\n\r\n" ) + 4;
+            }
+            if( sizeof(s->buf_stat) - 1 != read_bytes )
+                zabbix_log( LOG_LEVEL_DEBUG, ">> recv buff: %s\n", *data );
 
-			memcpy(s->buf_dyn, s->buf_stat, sizeof(s->buf_stat));
+            if (sizeof(s->buf_stat) - 1 == read_bytes)	/* static buffer is full */
+            {
+                allocated = ZBX_BUF_LEN;
+                s->buf_type = ZBX_BUF_TYPE_DYN;
+                s->buf_dyn = zbx_malloc(s->buf_dyn, allocated);
 
-			offset = read_bytes;
+                memcpy(s->buf_dyn, s->buf_stat, sizeof(s->buf_stat));
 
-			/* fill dynamic buffer */
-			while (read_bytes < expected_len &&
-					ZBX_TCP_ERROR != (nbytes = BIO_read(s->bio, s->buf_stat, sizeof(s->buf_stat))))
-			{
-				zbx_strncpy_alloc(&s->buf_dyn, &allocated, &offset, s->buf_stat, nbytes);
-				read_bytes += nbytes;
+                offset = read_bytes;
 
-				if (0 != (flags & ZBX_TCP_READ_UNTIL_CLOSE))
-				{
-					if (0 == nbytes)
-						break;
-				}
-				else
-				{
-					if (nbytes < sizeof(s->buf_stat) - 1)
-						break;
-				}
-			}
-			if( strncmp( &s->buf_dyn[0], "HTTP/1.1 200 OK", 15 ) == 0 )
-			{
-				*data = strstr( &s->buf_dyn[0], "\r\n\r\n" ) + 4;
-			}
-			else
-				*data = s->buf_dyn;
-			zabbix_log( LOG_LEVEL_DEBUG, ">> recv buff: %s\n", *data );
-		}
-	}
-	/*
-	if (ZBX_TCP_ERROR == nbytes)
-	{
-		zbx_set_tcp_strerror("ZBX_TCP_READ() failed: %s", strerror_from_system(zbx_sock_last_error()));
-		total_bytes = FAIL;
-	}*/
-cleanup:
-	if (0 != timeout)
-		zbx_tcp_timeout_cleanup(s);
+                /* fill dynamic buffer */
+                while (read_bytes < expected_len &&
+                        ZBX_TCP_ERROR != (nbytes = BIO_read(s->bio, s->buf_stat, sizeof(s->buf_stat))))
+                {
+                    zbx_strncpy_alloc(&s->buf_dyn, &allocated, &offset, s->buf_stat, nbytes);
+                    read_bytes += nbytes;
 
-	if (FAIL != total_bytes)
-		total_bytes += read_bytes;
-	zabbix_log( LOG_LEVEL_DEBUG, ">> total recv: %d\n", total_bytes );
-	return total_bytes;
+                    if (0 != (flags & ZBX_TCP_READ_UNTIL_CLOSE))
+                    {
+                        if (0 == nbytes)
+                            break;
+                    }
+                    else
+                    {
+                        if (nbytes < sizeof(s->buf_stat) - 1)
+                            break;
+                    }
+                }
+                if( strncmp( &s->buf_dyn[0], "HTTP/1.1 200 OK", 15 ) == 0 )
+                {
+                    *data = strstr( &s->buf_dyn[0], "\r\n\r\n" ) + 4;
+                }
+                else
+                    *data = s->buf_dyn;
+                zabbix_log( LOG_LEVEL_DEBUG, ">> recv buff: %s\n", *data );
+            }
+        }
+        /*
+        if (ZBX_TCP_ERROR == nbytes)
+        {
+            zbx_set_tcp_strerror("ZBX_TCP_READ() failed: %s", strerror_from_system(zbx_sock_last_error()));
+            total_bytes = FAIL;
+        }*/
+    cleanup1:
+        if (0 != timeout)
+            zbx_tcp_timeout_cleanup(s);
+
+        if (FAIL != total_bytes)
+            total_bytes += read_bytes;
+        zabbix_log( LOG_LEVEL_DEBUG, ">> total recv: %d\n", total_bytes );
+        return total_bytes;
+    }
+    else
+    {
+        ssize_t		nbytes, left, read_bytes, total_bytes;
+        size_t		allocated, offset;
+        zbx_uint64_t	expected_len;
+
+        ZBX_TCP_START();
+
+        if (0 != timeout)
+            zbx_tcp_timeout_set(s, timeout);
+
+        zbx_free(s->buf_dyn);
+
+        total_bytes = 0;
+        read_bytes = 0;
+        s->buf_type = ZBX_BUF_TYPE_STAT;
+
+        *data = s->buf_stat;
+
+        left = ZBX_TCP_HEADER_LEN;
+        nbytes = ZBX_TCP_READ(s->socket, s->buf_stat, left);
+
+        if (ZBX_TCP_HEADER_LEN == nbytes && 0 == strncmp(s->buf_stat, ZBX_TCP_HEADER, ZBX_TCP_HEADER_LEN))
+        {
+            total_bytes += nbytes;
+
+            left = sizeof(zbx_uint64_t);
+            nbytes = ZBX_TCP_READ(s->socket, (void *)&expected_len, left);
+            expected_len = zbx_letoh_uint64(expected_len);
+
+            flags |= ZBX_TCP_READ_UNTIL_CLOSE;
+        }
+        else if (ZBX_TCP_ERROR != nbytes)
+        {
+            read_bytes = nbytes;
+            expected_len = 16 * ZBX_MEBIBYTE;
+        }
+
+        if (ZBX_TCP_ERROR != nbytes)
+        {
+            s->buf_stat[read_bytes] = '\0';
+
+            if (0 != (flags & ZBX_TCP_READ_UNTIL_CLOSE))
+            {
+                if (0 == nbytes)
+                    goto cleanup;
+            }
+            else
+            {
+                if (nbytes < left)
+                    goto cleanup;
+            }
+
+            left = sizeof(s->buf_stat) - read_bytes - 1;
+
+            /* check for an empty socket if exactly ZBX_TCP_HEADER_LEN bytes (without a header) were sent */
+            if (0 == read_bytes || '\n' != s->buf_stat[read_bytes - 1])	/* requests to passive agents end with '\n' */
+            {
+                /* fill static buffer */
+                while (read_bytes < expected_len && 0 < left &&
+                        ZBX_TCP_ERROR != (nbytes = ZBX_TCP_READ(s->socket, s->buf_stat + read_bytes, left)))
+                {
+                    read_bytes += nbytes;
+
+                    if (0 != (flags & ZBX_TCP_READ_UNTIL_CLOSE))
+                    {
+                        if (0 == nbytes)
+                            break;
+                    }
+                    else
+                    {
+                        if (nbytes < left)
+                            break;
+                    }
+
+                    left -= nbytes;
+                }
+            }
+
+            s->buf_stat[read_bytes] = '\0';
+
+            if (sizeof(s->buf_stat) - 1 == read_bytes)	/* static buffer is full */
+            {
+                allocated = ZBX_BUF_LEN;
+                s->buf_type = ZBX_BUF_TYPE_DYN;
+                s->buf_dyn = zbx_malloc(s->buf_dyn, allocated);
+
+                memcpy(s->buf_dyn, s->buf_stat, sizeof(s->buf_stat));
+
+                offset = read_bytes;
+
+                /* fill dynamic buffer */
+                while (read_bytes < expected_len &&
+                        ZBX_TCP_ERROR != (nbytes = ZBX_TCP_READ(s->socket, s->buf_stat, sizeof(s->buf_stat))))
+                {
+                    zbx_strncpy_alloc(&s->buf_dyn, &allocated, &offset, s->buf_stat, nbytes);
+                    read_bytes += nbytes;
+
+                    if (0 != (flags & ZBX_TCP_READ_UNTIL_CLOSE))
+                    {
+                        if (0 == nbytes)
+                            break;
+                    }
+                    else
+                    {
+                        if (nbytes < sizeof(s->buf_stat) - 1)
+                            break;
+                    }
+                }
+
+                *data = s->buf_dyn;
+            }
+        }
+
+        if (ZBX_TCP_ERROR == nbytes)
+        {
+            zbx_set_tcp_strerror("ZBX_TCP_READ() failed: %s", strerror_from_system(zbx_sock_last_error()));
+            total_bytes = FAIL;
+        }
+    cleanup:
+        if (0 != timeout)
+            zbx_tcp_timeout_cleanup(s);
+
+        if (FAIL != total_bytes)
+            total_bytes += read_bytes;
+
+        return total_bytes;
+    }
+    return 0;
 }
 
 char	*get_ip_by_socket(zbx_sock_t *s)
