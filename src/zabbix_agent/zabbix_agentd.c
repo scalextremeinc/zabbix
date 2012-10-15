@@ -545,7 +545,7 @@ static void	zbx_load_config(int requirement)
 		zbx_validate_config();
 
     if( CONFIG_MODE == NULL )
-        CONFIG_MODE=zbx_strdup(NULL, "https");
+        CONFIG_MODE=zbx_strdup(NULL, "tcp");
 }
 
 /******************************************************************************
