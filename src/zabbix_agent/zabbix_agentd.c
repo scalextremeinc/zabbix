@@ -545,7 +545,10 @@ static void	zbx_load_config(int requirement)
 		zbx_validate_config();
 
     if( CONFIG_MODE == NULL )
+    {
+        zabbix_log(LOG_LEVEL_DEBUG, "Run as degault mode:tcp" );
         CONFIG_MODE=zbx_strdup(NULL, "tcp");
+    }
 }
 
 /******************************************************************************
