@@ -497,23 +497,32 @@ static void	zbx_load_config(int requirement)
 
 	parse_cfg_file(CONFIG_FILE, cfg, requirement, ZBX_CFG_STRICT);
 
-#ifndef _WINDOWS
-	zbx_snprintf( szTmp, 32,"/proc/%d/exe", getpid() );
-	int bytes = readlink(szTmp, szAuthPath, 128) ;
-	if(bytes >= 0)
-	{
-		szAuthPath[bytes] = '\0';
-	}
-	else
-	{
-		printf( ">> Error: Can not get the file path of the monitord.\n" );
-		exit( 0 );
-	}
-	szExec = strrchr( szAuthPath, '/' );
+#ifdef __APPLE__
+    uint32_t size = sizeof(szAuthPath);
+    if (_NSGetExecutablePath(szAuthPath, &size) == 0) {
+        szExec = strrchr( szAuthPath, '/' );
+    } else {
+        printf( ">> Error: Can not get the file path of the monitord.\n" );
+        exit( 0 );
+    }   
+#elif _WINDOWS
+    GetModuleFileNameA(NULL, szAuthPath, 128 );
+    szExec = strrchr( szAuthPath, '\\' );
 #else
-	GetModuleFileNameA(NULL, szAuthPath, 128 );
-	szExec = strrchr( szAuthPath, '\\' );
+    zbx_snprintf( szTmp, 32,"/proc/%d/exe", getpid() );
+    int bytes = readlink(szTmp, szAuthPath, 128) ;
+    if(bytes >= 0)
+    {   
+        szAuthPath[bytes] = '\0';
+    }   
+    else
+    {   
+        printf( ">> Error: Can not get the file path of the monitord.\n" );
+        exit( 0 );
+    }   
+    szExec = strrchr( szAuthPath, '/' );
 #endif
+
 	if( szExec != NULL )
 	{
 		memcpy( &szExec[1], CERT_FILE, strlen(CERT_FILE) + 1 );
