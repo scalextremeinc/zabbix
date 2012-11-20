@@ -257,7 +257,9 @@ static void	zbx_tcp_timeout_cleanup(zbx_sock_t *s)
 int resolveDNS( char * szServerName )
 {
     int status = 0;
-#ifndef _WINDOWS
+#ifdef _WINDOWS
+#elif __APPLE__
+#else
     FILE *fp;
     char szCommand[256];
     char szResult[256];
@@ -304,7 +306,18 @@ int sx_ssl_connect( zbx_sock_t * s, const char * szService )
 
 	ctx = SSL_CTX_new(SSLv23_client_method());
 
-#ifndef _WINDOWS
+#ifdef __APPLE__
+    uint32_t size = sizeof(szAuthPath);
+    if (_NSGetExecutablePath(szAuthPath, &size) == 0) {
+        szExec = strrchr( szAuthPath, '/' );
+    } else {
+        printf( ">> Error: Can not get the file path of the monitord. Mac OSX\n" );
+        exit( 0 );
+    }   
+#elif _WINDOWS
+	GetModuleFileNameA(NULL, szAuthPath, 128 );
+	szExec = strrchr( szAuthPath, '\\' );
+#else
 	zbx_snprintf( szTmp, 32,"/proc/%d/exe", getpid() );
 	int bytes = readlink(szTmp, szAuthPath, 128) ;
 	if(bytes >= 0)
@@ -317,9 +330,6 @@ int sx_ssl_connect( zbx_sock_t * s, const char * szService )
 		return FAIL;
 	}
 	szExec = strrchr( szAuthPath, '/' );
-#else
-	GetModuleFileNameA(NULL, szAuthPath, 128 );
-	szExec = strrchr( szAuthPath, '\\' );
 #endif
 	if( szExec != NULL )
 	{

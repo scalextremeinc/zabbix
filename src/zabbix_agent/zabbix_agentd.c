@@ -502,7 +502,7 @@ static void	zbx_load_config(int requirement)
     if (_NSGetExecutablePath(szAuthPath, &size) == 0) {
         szExec = strrchr( szAuthPath, '/' );
     } else {
-        printf( ">> Error: Can not get the file path of the monitord.\n" );
+        printf( ">> Error: Can not get the file path of the monitord. Mac OSX\n" );
         exit( 0 );
     }   
 #elif _WINDOWS
