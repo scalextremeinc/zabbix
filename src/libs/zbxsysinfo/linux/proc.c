@@ -209,6 +209,36 @@ static int	check_procstate(FILE *f_stat, int zbx_proc_stat)
 	return FAIL;
 }
 
+/*
+    custom getpwnum
+*/
+struct passwd * custom_getpwnam( const char * usrname )
+{
+    FILE *fp;
+    char szCommand[256];
+    char szResult[256];
+    struct passwd * info = (struct passwd*)calloc( 1, sizeof( struct passwd ) );
+    memset( szResult, 0, 256 );
+    zbx_snprintf( szCommand, 256, "id -u %s", usrname );
+    //sprintf( szCommand, "id -u %s", usrname );
+    fp = popen( szCommand, "r");
+    if (fp == NULL)
+        return NULL;
+    if( fgets(szResult, 256, fp) != NULL)
+    {
+        info->pw_name = usrname;
+        info->pw_uid = (uid_t)(atoi( szResult ));
+    }
+    else
+    {
+        pclose(fp);
+        return NULL;
+    }
+    pclose(fp);
+
+    return info;
+}
+
 int	PROC_MEM(const char *cmd, const char *param, unsigned flags, AGENT_RESULT *result)
 {
 	char		tmp[MAX_STRING_LEN], *p, *p1,
@@ -233,7 +263,7 @@ int	PROC_MEM(const char *cmd, const char *param, unsigned flags, AGENT_RESULT *r
 
 	if ('\0' != *tmp)
 	{
-		usrinfo = getpwnam(tmp);
+		usrinfo = custom_getpwnam(tmp);
 		if (NULL == usrinfo)	/* incorrect user name */
 			return SYSINFO_RET_FAIL;
 	}
@@ -372,7 +402,7 @@ int	PROC_NUM(const char *cmd, const char *param, unsigned flags, AGENT_RESULT *r
 
 	if (*tmp != '\0')
 	{
-		usrinfo = getpwnam(tmp);
+		usrinfo = custom_getpwnam(tmp);
 		if (usrinfo == NULL)	/* incorrect user name */
 			return SYSINFO_RET_FAIL;
 	}
