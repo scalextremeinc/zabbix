@@ -41,13 +41,15 @@
 
 #include "daemon.h"
 
+#ifdef HAVE_QUEUE
 #include "queue.h"
 #include <zmq.h>
 
+extern char* CONFIG_ZMQ_QUEUE_ADDRESS;
+#endif
+
 extern unsigned char	daemon_type;
 extern unsigned char	process_type;
-
-extern char* CONFIG_ZMQ_QUEUE_ADDRESS;
 
 /******************************************************************************
  *                                                                            *
@@ -205,7 +207,11 @@ static void	recv_proxy_heartbeat(zbx_sock_t *sock, struct zbx_json_parse *jp)
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
+#ifdef HAVE_QUEUE
 static int	process_trap(zbx_sock_t	*sock, char *s, int max_len, struct queue_ctx* qctx)
+#else
+static int	process_trap(zbx_sock_t	*sock, char *s, int max_len)
+#endif
 {
 	char	*pl, *pr, *data, value_dec[MAX_BUFFER_LEN];
 	char	lastlogsize[ZBX_MAX_UINT64_LEN], timestamp[11], source[HISTORY_LOG_SOURCE_LEN_MAX], severity[11];
@@ -305,7 +311,9 @@ static int	process_trap(zbx_sock_t	*sock, char *s, int max_len, struct queue_ctx
 				else if (0 == strcmp(value, ZBX_PROTO_VALUE_AGENT_DATA) ||
 					0 == strcmp(value, ZBX_PROTO_VALUE_SENDER_DATA))
 				{
+#ifdef HAVE_QUEUE
                     queue_msg(qctx, jp.start);
+#endif
 					recv_agenthistory(sock, &jp);
 				}
 				else if (0 == strcmp(value, ZBX_PROTO_VALUE_HISTORY_DATA))
@@ -404,14 +412,21 @@ static int	process_trap(zbx_sock_t	*sock, char *s, int max_len, struct queue_ctx
 	return ret;
 }
 
+#ifdef HAVE_QUEUE
 static void	process_trapper_child(zbx_sock_t *sock, struct queue_ctx* qctx)
+#else
+static void	process_trapper_child(zbx_sock_t *sock)
+#endif
 {
 	char	*data;
 
 	if (SUCCEED != zbx_tcp_recv_to(sock, &data, CONFIG_TRAPPER_TIMEOUT))
 		return;
-
+#ifdef HAVE_QUEUE
 	process_trap(sock, data, sizeof(data), qctx);
+#else
+    process_trap(sock, data, sizeof(data));
+#endif
 }
 
 void	main_trapper_loop(zbx_sock_t *s)
@@ -424,10 +439,12 @@ void	main_trapper_loop(zbx_sock_t *s)
 
 	DBconnect(ZBX_DB_CONNECT_NORMAL);
     
+#ifdef HAVE_QUEUE
     // connect to zmq queue
     struct queue_ctx qctx;
     queue_ctx_init(&qctx);
     queue_sock_connect_msg(&qctx, CONFIG_ZMQ_QUEUE_ADDRESS);
+#endif
 
 	for (;;)
 	{
@@ -441,14 +458,20 @@ void	main_trapper_loop(zbx_sock_t *s)
 
 			zbx_setproctitle("%s [processing data]", get_process_type_string(process_type));
 
+#ifdef HAVE_QUEUE
 			process_trapper_child(s, &qctx);
+#else
+            process_trapper_child(s);
+#endif
 
 			zbx_tcp_unaccept(s);
 		}
 		else
 			zabbix_log(LOG_LEVEL_WARNING, "Trapper failed to accept connection");
 	}
-    
+
+#ifdef HAVE_QUEUE
     // clean up queue stuff
     queue_ctx_destroy(&qctx);
+#endif
 }

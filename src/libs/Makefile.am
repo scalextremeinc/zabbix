@@ -48,6 +48,11 @@ SERVER_SUBDIRS = \
 	zbxself
 endif
 
+if QUEUE
+QUEUE_SUBDIRS = \
+	queue
+endif
+
 SUBDIRS = \
 	zbxcrypto \
 	zbxcommon \
@@ -60,7 +65,7 @@ SUBDIRS = \
 	zbxcomms \
 	zbxjson \
 	zbxexec \
-	queue \
+	$(QUEUE_SUBDIRS) \
 	$(PROXY_SUBDIRS) \
 	$(SERVER_SUBDIRS)
 

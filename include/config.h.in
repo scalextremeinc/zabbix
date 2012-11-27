@@ -264,6 +264,9 @@
 /* Define to 1 if you have the <pwd.h> header file. */
 #undef HAVE_PWD_H
 
+/* Define to 1 if queue should be enabled. */
+#undef HAVE_QUEUE
+
 /* Define to 1 if you have the <regex.h> header file. */
 #undef HAVE_REGEX_H
 
@@ -494,6 +497,9 @@
 
 /* Define to 1 if you have the <ws2tcpip.h> header file. */
 #undef HAVE_WS2TCPIP_H
+
+/* Define to 1 if you have the <zmq.h> header file. */
+#undef HAVE_ZMQ_H
 
 /* Define to 1 if macro '__VA_ARGS__' exists. */
 #undef HAVE___VA_ARGS__

@@ -680,6 +680,8 @@ MYSQL_VERSION
 MYSQL_CONFIG
 JAVA_FALSE
 JAVA_TRUE
+QUEUE_FALSE
+QUEUE_TRUE
 AGENT_FALSE
 AGENT_TRUE
 PROXY_FALSE
@@ -786,6 +788,7 @@ enable_static
 enable_server
 enable_proxy
 enable_agent
+enable_queue
 enable_java
 enable_ipv6
 with_ibm_db2
@@ -1446,6 +1449,7 @@ Optional Features:
   --enable-server         Turn on build of Zabbix server
   --enable-proxy          Turn on build of Zabbix proxy
   --enable-agent          Turn on build of Zabbix agent and client utilities
+  --enable-queue          Turn on build of Zabbix zmq queue functionality
   --enable-java           Turn on build of Zabbix Java gateway
   --enable-ipv6           Turn on support of IPv6
 
@@ -7228,6 +7232,26 @@ else
 fi
 
 
+# Check whether --enable-queue was given.
+if test "${enable_queue+set}" = set; then :
+  enableval=$enable_queue; case "${enableval}" in
+  yes) queue=yes ;;
+  no)  queue=no ;;
+  *) as_fn_error $? "bad value ${enableval} for --enable-queue" "$LINENO" 5 ;;
+esac
+else
+  queue=no
+fi
+
+ if test "x$queue" = "xyes"; then
+  QUEUE_TRUE=
+  QUEUE_FALSE='#'
+else
+  QUEUE_TRUE='#'
+  QUEUE_FALSE=
+fi
+
+
 # Check whether --enable-java was given.
 if test "${enable_java+set}" = set; then :
   enableval=$enable_java; case "${enableval}" in
@@ -7275,6 +7299,13 @@ $as_echo "#define HAVE_IPV6 1" >>confdefs.h
 
 	have_ipv6="yes"
 fi
+
+if test "$queue" = "yes"; then
+
+$as_echo "#define HAVE_QUEUE 1" >>confdefs.h
+
+fi
+
 
 if test "$server" = "yes" || test "$proxy" = "yes"; then
 
@@ -11075,6 +11106,10 @@ if test -z "${AGENT_TRUE}" && test -z "${AGENT_FALSE}"; then
   as_fn_error $? "conditional \"AGENT\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
 fi
+if test -z "${QUEUE_TRUE}" && test -z "${QUEUE_FALSE}"; then
+  as_fn_error $? "conditional \"QUEUE\" was never defined.
+Usually this means the macro was only invoked conditionally." "$LINENO" 5
+fi
 if test -z "${JAVA_TRUE}" && test -z "${JAVA_FALSE}"; then
   as_fn_error $? "conditional \"JAVA\" was never defined.
 Usually this means the macro was only invoked conditionally." "$LINENO" 5
@@ -12513,7 +12548,8 @@ echo "  Server details:
     IPMI:                  ${have_ipmi}
     SSH:                   ${have_ssh2}
     Linker flags:          ${LDFLAGS} ${SERVER_LDFLAGS}
-    Libraries:             ${LIBS} ${SERVER_LIBS}"
+    Libraries:             ${LIBS} ${SERVER_LIBS}
+    Enable queue:          ${queue}"
 
 fi
 

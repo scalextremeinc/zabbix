@@ -306,6 +306,9 @@ DIST_SUBDIRS = \
 @SERVER_TRUE@	zbxmedia \
 @SERVER_TRUE@	zbxself
 
+@QUEUE_TRUE@QUEUE_SUBDIRS = \
+@QUEUE_TRUE@	queue
+
 SUBDIRS = \
 	zbxcrypto \
 	zbxcommon \
@@ -318,7 +321,7 @@ SUBDIRS = \
 	zbxcomms \
 	zbxjson \
 	zbxexec \
-	queue \
+	$(QUEUE_SUBDIRS) \
 	$(PROXY_SUBDIRS) \
 	$(SERVER_SUBDIRS)
 

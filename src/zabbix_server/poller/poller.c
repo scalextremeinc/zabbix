@@ -43,16 +43,17 @@
 #include "checks_java.h"
 #include "checks_calculated.h"
 
+#ifdef HAVE_QUEUE
 #include "queue.h"
 #include "zbxjson.h"
 #include <zmq.h>
+extern char* CONFIG_ZMQ_QUEUE_ADDRESS;
+#endif
 
 #define MAX_BUNCH_ITEMS	32
 
 extern unsigned char	process_type;
 extern int		process_num;
-
-extern char* CONFIG_ZMQ_QUEUE_ADDRESS;
 
 static int	is_bunch_poller(int poller_type)
 {
@@ -552,6 +553,7 @@ static int	get_value(DC_ITEM *item, AGENT_RESULT *result)
 	return res;
 }
 
+#ifdef HAVE_QUEUE
 static void item_to_json(struct zbx_json *j, DC_ITEM *item,
         AGENT_RESULT *result, zbx_timespec_t *ts) {
     const size_t BUF_SIZE = 32;
@@ -607,7 +609,7 @@ static void item_to_json(struct zbx_json *j, DC_ITEM *item,
     
     if (do_free) free(value);
 }
-
+#endif
 /******************************************************************************
  *                                                                            *
  * Function: get_values                                                       *
@@ -623,7 +625,11 @@ static void item_to_json(struct zbx_json *j, DC_ITEM *item,
  * Comments:                                                                  *
  *                                                                            *
  ******************************************************************************/
+#ifdef HAVE_QUEUE
 static int	get_values(unsigned char poller_type, struct queue_ctx* qctx)
+#else
+static int	get_values(unsigned char poller_type)
+#endif
 {
 	const char	*__function_name = "get_values";
 	DC_ITEM		items[MAX_BUNCH_ITEMS];
@@ -786,9 +792,10 @@ static int	get_values(unsigned char poller_type, struct queue_ctx* qctx)
 
 		if (SUCCEED == errcodes[i])
 		{
+#ifdef HAVE_QUEUE
             item_to_json(&j, &items[i], &results[i], &timespecs[i]);
             queue_msg(qctx, j.buffer);
-                
+#endif                
 			dc_add_history(items[i].itemid, items[i].value_type, items[i].flags, &results[i], &timespecs[i],
 					ITEM_STATUS_ACTIVE, NULL, 0, NULL, 0, 0, 0, 0);
 
@@ -854,18 +861,24 @@ void	main_poller_loop(unsigned char poller_type)
 	zbx_setproctitle("%s [connecting to the database]", get_process_type_string(process_type));
 
 	DBconnect(ZBX_DB_CONNECT_NORMAL);
-    
+
+#ifdef HAVE_QUEUE
     // connect to zmq queue
     struct queue_ctx qctx;
     queue_ctx_init(&qctx);
     queue_sock_connect_msg(&qctx, CONFIG_ZMQ_QUEUE_ADDRESS);
+#endif
 
 	for (;;)
 	{
 		zbx_setproctitle("%s [getting values]", get_process_type_string(process_type));
 
 		sec = zbx_time();
+#ifdef HAVE_QUEUE
 		processed = get_values(poller_type, &qctx);
+#else
+        processed = get_values(poller_type);
+#endif
 		sec = zbx_time() - sec;
 
 		zabbix_log(LOG_LEVEL_DEBUG, "%s #%d spent " ZBX_FS_DBL " seconds while updating %d values",
@@ -876,7 +889,8 @@ void	main_poller_loop(unsigned char poller_type)
 
 		zbx_sleep_loop(sleeptime);
 	}
-    
+#ifdef HAVE_QUEUE
     // clean up queue stuff
     queue_ctx_destroy(&qctx);
+#endif
 }

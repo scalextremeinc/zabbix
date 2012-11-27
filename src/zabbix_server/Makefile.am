@@ -68,8 +68,11 @@ zabbix_server_LDADD = \
 	$(top_srcdir)/src/libs/zbxserver/libzbxserver.a \
 	$(top_srcdir)/src/libs/zbxicmpping/libzbxicmpping.a \
 	$(top_srcdir)/src/libs/zbxdbhigh/libzbxdbhigh.a \
-	$(top_srcdir)/src/libs/zbxdb/libzbxdb.a \
-	$(top_srcdir)/src/libs/queue/libqueue.a
+	$(top_srcdir)/src/libs/zbxdb/libzbxdb.a
+
+if QUEUE
+zabbix_server_LDADD += $(top_srcdir)/src/libs/queue/libqueue.a
+endif
 
 zabbix_server_LDADD += @SERVER_LIBS@
 

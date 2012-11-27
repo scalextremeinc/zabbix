@@ -186,7 +186,10 @@ int	CONFIG_PROXYPOLLER_FORKS	= 1;	/* parameters for passive proxies */
 /* how often zabbix server sends configuration data to proxy, in seconds */
 int	CONFIG_PROXYCONFIG_FREQUENCY	= 3600;	/* 1h */
 int	CONFIG_PROXYDATA_FREQUENCY	= 1;	/* 1s */
+
+#ifdef HAVE_QUEUE
 char* CONFIG_ZMQ_QUEUE_ADDRESS = NULL;
+#endif
 
 /* mutex for node syncs */
 ZBX_MUTEX	node_sync_access;
@@ -390,8 +393,10 @@ static void	zbx_load_config()
 			PARM_OPT,	1,			SEC_PER_WEEK},
 		{"ProxyDataFrequency",		&CONFIG_PROXYDATA_FREQUENCY,		TYPE_INT,
 			PARM_OPT,	1,			SEC_PER_HOUR},
+#ifdef HAVE_QUEUE
         {"ZmqQueueAddress",		&CONFIG_ZMQ_QUEUE_ADDRESS,		TYPE_STRING,
 			PARM_MAND,	0,			0},
+#endif
 		{NULL}
 	};
 
@@ -548,6 +553,11 @@ int	MAIN_ZABBIX_ENTRY()
 #else
 #	define IPV6_FEATURE_STATUS	" NO"
 #endif
+#ifdef	HAVE_QUEUE
+#	define QUEUE_FEATURE_STATUS	"YES"
+#else
+#	define QUEUE_FEATURE_STATUS	" NO"
+#endif
 
 	zabbix_log(LOG_LEVEL_INFORMATION, "Starting Zabbix Server. Zabbix %s (revision %s).",
 			ZABBIX_VERSION, ZABBIX_REVISION);
@@ -561,6 +571,7 @@ int	MAIN_ZABBIX_ENTRY()
 	zabbix_log(LOG_LEVEL_INFORMATION, "ODBC:                      " ODBC_FEATURE_STATUS);
 	zabbix_log(LOG_LEVEL_INFORMATION, "SSH2 support:              " SSH2_FEATURE_STATUS);
 	zabbix_log(LOG_LEVEL_INFORMATION, "IPv6 support:              " IPV6_FEATURE_STATUS);
+    zabbix_log(LOG_LEVEL_INFORMATION, "Queue support:             " QUEUE_FEATURE_STATUS);
 	zabbix_log(LOG_LEVEL_INFORMATION, "******************************");
 
 	if (0 != CONFIG_NODEID)
