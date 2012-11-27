@@ -25,6 +25,10 @@
 #include "log.h"
 #include "zbxgetopt.h"
 
+// used by agent - required for comms linking
+char *CONFIG_HOSTNAME;
+char *CONFIG_MODE;
+
 const char	*progname = NULL;
 const char	title_message[] = "Zabbix get";
 const char	usage_message[] = "[-hV] -s <host name or IP> [-p <port>] [-I <IP address>] -k <key>";

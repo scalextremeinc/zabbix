@@ -26,6 +26,10 @@
 #include "zbxgetopt.h"
 #include "zbxjson.h"
 
+// used by agent - required for comms linking
+char *CONFIG_HOSTNAME;
+char *CONFIG_MODE;
+
 const char	*progname = NULL;
 const char	title_message[] = "Zabbix Sender";
 const char	usage_message[] = "[-Vhv] {[-zpsI] -ko | [-zpI] -T -i <file> -r} [-c <file>]";

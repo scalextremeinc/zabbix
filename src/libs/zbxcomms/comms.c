@@ -21,7 +21,7 @@
 #include "comms.h"
 #include "log.h"
 
-extern char	*CONFIG_HOSTNAME;
+extern char *CONFIG_HOSTNAME;
 extern char *CONFIG_MODE;
 
 #if defined(HAVE_IPV6)
