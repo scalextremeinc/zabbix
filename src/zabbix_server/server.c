@@ -186,6 +186,7 @@ int	CONFIG_PROXYPOLLER_FORKS	= 1;	/* parameters for passive proxies */
 /* how often zabbix server sends configuration data to proxy, in seconds */
 int	CONFIG_PROXYCONFIG_FREQUENCY	= 3600;	/* 1h */
 int	CONFIG_PROXYDATA_FREQUENCY	= 1;	/* 1s */
+char* CONFIG_ZMQ_QUEUE_ADDRESS = NULL;
 
 /* mutex for node syncs */
 ZBX_MUTEX	node_sync_access;
@@ -389,6 +390,8 @@ static void	zbx_load_config()
 			PARM_OPT,	1,			SEC_PER_WEEK},
 		{"ProxyDataFrequency",		&CONFIG_PROXYDATA_FREQUENCY,		TYPE_INT,
 			PARM_OPT,	1,			SEC_PER_HOUR},
+        {"ZmqQueueAddress",		&CONFIG_ZMQ_QUEUE_ADDRESS,		TYPE_STRING,
+			PARM_MAND,	0,			0},
 		{NULL}
 	};
 
