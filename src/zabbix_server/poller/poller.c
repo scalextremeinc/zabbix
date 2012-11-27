@@ -43,10 +43,15 @@
 #include "checks_java.h"
 #include "checks_calculated.h"
 
+#include "zbxjson.h"
+#include <zmq.h>
+
 #define MAX_BUNCH_ITEMS	32
 
 extern unsigned char	process_type;
 extern int		process_num;
+
+extern char* CONFIG_ZMQ_QUEUE_ADDRESS;
 
 static int	is_bunch_poller(int poller_type)
 {
@@ -444,7 +449,7 @@ static void	deactivate_host(DC_ITEM *item, zbx_timespec_t *ts, const char *error
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
-static int	get_value(DC_ITEM *item, AGENT_RESULT *result)
+static int	get_value(DC_ITEM *item, AGENT_RESULT *result, void *queue_socket_zmq)
 {
 	const char	*__function_name = "get_value";
 	int		res = FAIL;
@@ -546,6 +551,62 @@ static int	get_value(DC_ITEM *item, AGENT_RESULT *result)
 	return res;
 }
 
+static void item_to_json(struct zbx_json *j, DC_ITEM *item,
+        AGENT_RESULT *result, zbx_timespec_t *ts) {
+    const size_t BUF_SIZE = 32;
+    char buf[BUF_SIZE];
+    char *value;
+    char do_free = 0;
+    
+    switch (item->value_type)
+	{
+		case ITEM_VALUE_TYPE_FLOAT:
+            value = malloc(sizeof(char) * BUF_SIZE);
+            do_free = 1;
+            zbx_snprintf(value, BUF_SIZE, "%f", result->dbl);
+			break;
+		case ITEM_VALUE_TYPE_UINT64:
+            value = malloc(sizeof(char) * BUF_SIZE);
+            do_free = 1;
+            zbx_snprintf(value, BUF_SIZE, ZBX_FS_UI64, result->ui64);
+			break;
+		case ITEM_VALUE_TYPE_STR:
+        case ITEM_VALUE_TYPE_LOG:
+            value = result->str;
+            break;
+		case ITEM_VALUE_TYPE_TEXT:
+            value = result->text;
+            break;
+		default:
+			zabbix_log(LOG_LEVEL_ERR, "unknown value type [%d] for itemid [" ZBX_FS_UI64 "]",
+					item->value_type, item->itemid);
+	}
+       
+    zbx_json_clean(j);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_REQUEST, ZBX_PROTO_VALUE_AGENT_DATA, ZBX_JSON_TYPE_STRING);
+    
+    zbx_snprintf(buf, BUF_SIZE, "%d", ts->sec);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
+    
+    zbx_snprintf(buf, BUF_SIZE, "%d", ts->ns);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_NS, buf, ZBX_JSON_TYPE_INT);
+        
+    zbx_json_addarray(j, ZBX_PROTO_TAG_DATA);
+    
+    zbx_json_addobject(j, NULL);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item->host.host, ZBX_JSON_TYPE_STRING);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, item->key, ZBX_JSON_TYPE_STRING);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, value, ZBX_JSON_TYPE_STRING);
+    
+    zbx_snprintf(buf, BUF_SIZE, "%d", ts->sec);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
+    
+    zbx_snprintf(buf, BUF_SIZE, "%d", ts->ns);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_NS, buf, ZBX_JSON_TYPE_INT);
+    
+    if (do_free) free(value);
+}
+
 /******************************************************************************
  *                                                                            *
  * Function: get_values                                                       *
@@ -561,7 +622,7 @@ static int	get_value(DC_ITEM *item, AGENT_RESULT *result)
  * Comments:                                                                  *
  *                                                                            *
  ******************************************************************************/
-static int	get_values(unsigned char poller_type)
+static int	get_values(unsigned char poller_type, void *queue_socket_zmq)
 {
 	const char	*__function_name = "get_values";
 	DC_ITEM		items[MAX_BUNCH_ITEMS];
@@ -570,6 +631,13 @@ static int	get_values(unsigned char poller_type)
 	zbx_timespec_t	timespecs[MAX_BUNCH_ITEMS];
 	int		i, num;
 	char		*port = NULL, error[ITEM_ERROR_LEN_MAX];
+    
+    //const size_t MSG_BUF_SIZE = 2048;
+    //char msg_buf[MSG_BUF_SIZE];
+    struct zbx_json j;
+    size_t msg_len;
+        
+    zbx_json_init(&j, ZBX_JSON_STAT_BUF_LEN);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
 
@@ -688,7 +756,7 @@ static int	get_values(unsigned char poller_type)
 	{
 		if (SUCCEED == errcodes[0])
 		{
-			errcodes[0] = get_value(&items[0], &results[0]);
+			errcodes[0] = get_value(&items[0], &results[0], queue_socket_zmq);
 			zbx_timespec(&timespecs[0]);
 		}
 	}
@@ -720,6 +788,16 @@ static int	get_values(unsigned char poller_type)
 
 		if (SUCCEED == errcodes[i])
 		{
+            item_to_json(&j, &items[i], &results[i], &timespecs[i]);
+            //zabbix_log(LOG_LEVEL_INFORMATION, "*** poller json: %s", j.buffer);
+            msg_len = strlen(j.buffer);
+            // send json data to queue
+            zmq_msg_t request_zmq;
+            zmq_msg_init_size(&request_zmq, msg_len);
+            memcpy(zmq_msg_data(&request_zmq), j.buffer, msg_len);
+            zmq_msg_send(&request_zmq, queue_socket_zmq, 0);
+            zmq_msg_close(&request_zmq);
+                
 			dc_add_history(items[i].itemid, items[i].value_type, items[i].flags, &results[i], &timespecs[i],
 					ITEM_STATUS_ACTIVE, NULL, 0, NULL, 0, 0, 0, 0);
 
@@ -767,6 +845,7 @@ static int	get_values(unsigned char poller_type)
 	}
 
 	DCconfig_clean_items(items, NULL, num);
+    zbx_json_free(&j);
 exit:
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%d", __function_name, num);
 
@@ -784,13 +863,17 @@ void	main_poller_loop(unsigned char poller_type)
 	zbx_setproctitle("%s [connecting to the database]", get_process_type_string(process_type));
 
 	DBconnect(ZBX_DB_CONNECT_NORMAL);
+    
+    void *context_zmq = zmq_ctx_new();
+    void *queue_socket_zmq = zmq_socket(context_zmq, ZMQ_PUSH);
+    zmq_connect(queue_socket_zmq, CONFIG_ZMQ_QUEUE_ADDRESS);
 
 	for (;;)
 	{
 		zbx_setproctitle("%s [getting values]", get_process_type_string(process_type));
 
 		sec = zbx_time();
-		processed = get_values(poller_type);
+		processed = get_values(poller_type, queue_socket_zmq);
 		sec = zbx_time() - sec;
 
 		zabbix_log(LOG_LEVEL_DEBUG, "%s #%d spent " ZBX_FS_DBL " seconds while updating %d values",
@@ -801,4 +884,7 @@ void	main_poller_loop(unsigned char poller_type)
 
 		zbx_sleep_loop(sleeptime);
 	}
+    
+    zmq_close(queue_socket_zmq);
+    zmq_ctx_destroy(context_zmq);
 }
