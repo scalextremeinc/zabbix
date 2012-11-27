@@ -1414,6 +1414,7 @@ AC_OUTPUT([
 	src/libs/zbxicmpping/Makefile
 	src/libs/zbxexec/Makefile
 	src/libs/zbxself/Makefile
+    src/libs/queue/Makefile
 	src/zabbix_agent/Makefile
 	src/zabbix_get/Makefile
 	src/zabbix_sender/Makefile
