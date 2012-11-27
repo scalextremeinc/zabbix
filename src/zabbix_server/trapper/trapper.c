@@ -42,6 +42,7 @@
 #include "daemon.h"
 
 #include <zmq.h>
+#include <errno.h>
 
 extern unsigned char	daemon_type;
 extern unsigned char	process_type;
@@ -306,12 +307,19 @@ static int	process_trap(zbx_sock_t	*sock, char *s, int max_len, void* queue_sock
 					0 == strcmp(value, ZBX_PROTO_VALUE_SENDER_DATA))
 				{
                     msg_len = strlen(jp.start);
-                    //zabbix_log(LOG_LEVEL_INFORMATION, "*** len: %d, data: %s", msg_len, jp.start);
                     // send json data to queue
                     zmq_msg_t request_zmq;
-                    zmq_msg_init_size(&request_zmq, msg_len);
+                    if (zmq_msg_init_size(&request_zmq, msg_len) == -1) {
+                        zabbix_log(LOG_LEVEL_ERR, "Error allocating zmq message: %s", strerror(errno));
+                    }
                     memcpy(zmq_msg_data(&request_zmq), jp.start, msg_len);
-                    zmq_msg_send(&request_zmq, queue_socket_zmq, 0);
+                    // ZMQ_DONTWAIT
+                    // Specifies that the operation should be performed in non-blocking mode.
+                    // If the message cannot be queued on the socket, the zmq_msg_send()
+                    // function shall fail with errno set to EAGAIN
+                    if (zmq_msg_send(&request_zmq, queue_socket_zmq, ZMQ_DONTWAIT) == -1) {
+                        zabbix_log(LOG_LEVEL_ERR, "Error sending to queue: %s", strerror(errno));
+                    }
                     zmq_msg_close(&request_zmq);
                     
 					recv_agenthistory(sock, &jp);
@@ -433,8 +441,17 @@ void	main_trapper_loop(zbx_sock_t *s)
 	DBconnect(ZBX_DB_CONNECT_NORMAL);
     
     void* context_zmq = zmq_ctx_new();
+    if (context_zmq == NULL) {
+        zabbix_log(LOG_LEVEL_ERR, "Error initializing zmq context: %s", strerror(errno));
+    }
     void* queue_socket_zmq = zmq_socket(context_zmq, ZMQ_PUSH);
-    zmq_connect(queue_socket_zmq, CONFIG_ZMQ_QUEUE_ADDRESS);
+    if (queue_socket_zmq == NULL) {
+        zabbix_log(LOG_LEVEL_ERR, "Error creating zmq socket: %s", strerror(errno));
+    }
+    if (zmq_connect(queue_socket_zmq, CONFIG_ZMQ_QUEUE_ADDRESS) == -1) {
+        zabbix_log(LOG_LEVEL_ERR, "Error connecting to zmq socket: %s, error: %s",
+            CONFIG_ZMQ_QUEUE_ADDRESS, strerror(errno));
+    }
 
 	for (;;)
 	{

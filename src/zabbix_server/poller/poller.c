@@ -45,6 +45,7 @@
 
 #include "zbxjson.h"
 #include <zmq.h>
+#include <errno.h>
 
 #define MAX_BUNCH_ITEMS	32
 
@@ -793,9 +794,17 @@ static int	get_values(unsigned char poller_type, void *queue_socket_zmq)
             msg_len = strlen(j.buffer);
             // send json data to queue
             zmq_msg_t request_zmq;
-            zmq_msg_init_size(&request_zmq, msg_len);
+            if (zmq_msg_init_size(&request_zmq, msg_len) == -1) {
+                zabbix_log(LOG_LEVEL_ERR, "Error allocating zmq message: %s", strerror(errno));
+            }
             memcpy(zmq_msg_data(&request_zmq), j.buffer, msg_len);
-            zmq_msg_send(&request_zmq, queue_socket_zmq, 0);
+            // ZMQ_DONTWAIT
+            // Specifies that the operation should be performed in non-blocking mode.
+            // If the message cannot be queued on the socket, the zmq_msg_send()
+            // function shall fail with errno set to EAGAIN
+            if (zmq_msg_send(&request_zmq, queue_socket_zmq, ZMQ_DONTWAIT) == -1) {
+                zabbix_log(LOG_LEVEL_ERR, "Error sending to queue: %s", strerror(errno));
+            }
             zmq_msg_close(&request_zmq);
                 
 			dc_add_history(items[i].itemid, items[i].value_type, items[i].flags, &results[i], &timespecs[i],
@@ -865,8 +874,17 @@ void	main_poller_loop(unsigned char poller_type)
 	DBconnect(ZBX_DB_CONNECT_NORMAL);
     
     void *context_zmq = zmq_ctx_new();
+    if (context_zmq == NULL) {
+        zabbix_log(LOG_LEVEL_ERR, "Error initializing zmq context: %s", strerror(errno));
+    }
     void *queue_socket_zmq = zmq_socket(context_zmq, ZMQ_PUSH);
-    zmq_connect(queue_socket_zmq, CONFIG_ZMQ_QUEUE_ADDRESS);
+    if (queue_socket_zmq == NULL) {
+        zabbix_log(LOG_LEVEL_ERR, "Error creating zmq socket: %s", strerror(errno));
+    }
+    if (zmq_connect(queue_socket_zmq, CONFIG_ZMQ_QUEUE_ADDRESS) == -1) {
+        zabbix_log(LOG_LEVEL_ERR, "Error connecting to zmq socket: %s, error: %s",
+            CONFIG_ZMQ_QUEUE_ADDRESS, strerror(errno));
+    }
 
 	for (;;)
 	{
