@@ -205,7 +205,7 @@ static void	recv_proxy_heartbeat(zbx_sock_t *sock, struct zbx_json_parse *jp)
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
-static int	process_trap(zbx_sock_t	*sock, char *s, int max_len, void* queue_socket_zmq)
+static int	process_trap(zbx_sock_t	*sock, char *s, int max_len, struct queue_ctx* qctx)
 {
 	char	*pl, *pr, *data, value_dec[MAX_BUFFER_LEN];
 	char	lastlogsize[ZBX_MAX_UINT64_LEN], timestamp[11], source[HISTORY_LOG_SOURCE_LEN_MAX], severity[11];
@@ -305,7 +305,7 @@ static int	process_trap(zbx_sock_t	*sock, char *s, int max_len, void* queue_sock
 				else if (0 == strcmp(value, ZBX_PROTO_VALUE_AGENT_DATA) ||
 					0 == strcmp(value, ZBX_PROTO_VALUE_SENDER_DATA))
 				{
-                    queue_send_msg(queue_socket_zmq, jp.start);
+                    queue_msg(qctx, jp.start);
 					recv_agenthistory(sock, &jp);
 				}
 				else if (0 == strcmp(value, ZBX_PROTO_VALUE_HISTORY_DATA))
@@ -404,14 +404,14 @@ static int	process_trap(zbx_sock_t	*sock, char *s, int max_len, void* queue_sock
 	return ret;
 }
 
-static void	process_trapper_child(zbx_sock_t *sock, void* queue_socket_zmq)
+static void	process_trapper_child(zbx_sock_t *sock, struct queue_ctx* qctx)
 {
 	char	*data;
 
 	if (SUCCEED != zbx_tcp_recv_to(sock, &data, CONFIG_TRAPPER_TIMEOUT))
 		return;
 
-	process_trap(sock, data, sizeof(data), queue_socket_zmq);
+	process_trap(sock, data, sizeof(data), qctx);
 }
 
 void	main_trapper_loop(zbx_sock_t *s)
@@ -425,8 +425,9 @@ void	main_trapper_loop(zbx_sock_t *s)
 	DBconnect(ZBX_DB_CONNECT_NORMAL);
     
     // connect to zmq queue
-    void* context_zmq = queue_create_context();
-    void* queue_socket_zmq = queue_create_socket(context_zmq, CONFIG_ZMQ_QUEUE_ADDRESS);
+    struct queue_ctx qctx;
+    queue_ctx_init(&qctx);
+    queue_sock_connect_msg(&qctx, CONFIG_ZMQ_QUEUE_ADDRESS);
 
 	for (;;)
 	{
@@ -440,7 +441,7 @@ void	main_trapper_loop(zbx_sock_t *s)
 
 			zbx_setproctitle("%s [processing data]", get_process_type_string(process_type));
 
-			process_trapper_child(s, queue_socket_zmq);
+			process_trapper_child(s, &qctx);
 
 			zbx_tcp_unaccept(s);
 		}
@@ -448,7 +449,6 @@ void	main_trapper_loop(zbx_sock_t *s)
 			zabbix_log(LOG_LEVEL_WARNING, "Trapper failed to accept connection");
 	}
     
-    // clean up zmq stuff
-    zmq_close(queue_socket_zmq);
-    zmq_ctx_destroy(context_zmq);
+    // clean up queue stuff
+    queue_ctx_destroy(&qctx);
 }

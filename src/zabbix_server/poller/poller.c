@@ -623,7 +623,7 @@ static void item_to_json(struct zbx_json *j, DC_ITEM *item,
  * Comments:                                                                  *
  *                                                                            *
  ******************************************************************************/
-static int	get_values(unsigned char poller_type, void *queue_socket_zmq)
+static int	get_values(unsigned char poller_type, struct queue_ctx* qctx)
 {
 	const char	*__function_name = "get_values";
 	DC_ITEM		items[MAX_BUNCH_ITEMS];
@@ -787,7 +787,7 @@ static int	get_values(unsigned char poller_type, void *queue_socket_zmq)
 		if (SUCCEED == errcodes[i])
 		{
             item_to_json(&j, &items[i], &results[i], &timespecs[i]);
-            queue_send_msg(queue_socket_zmq, j.buffer);
+            queue_msg(qctx, j.buffer);
                 
 			dc_add_history(items[i].itemid, items[i].value_type, items[i].flags, &results[i], &timespecs[i],
 					ITEM_STATUS_ACTIVE, NULL, 0, NULL, 0, 0, 0, 0);
@@ -856,15 +856,16 @@ void	main_poller_loop(unsigned char poller_type)
 	DBconnect(ZBX_DB_CONNECT_NORMAL);
     
     // connect to zmq queue
-    void* context_zmq = queue_create_context();
-    void* queue_socket_zmq = queue_create_socket(context_zmq, CONFIG_ZMQ_QUEUE_ADDRESS);
+    struct queue_ctx qctx;
+    queue_ctx_init(&qctx);
+    queue_sock_connect_msg(&qctx, CONFIG_ZMQ_QUEUE_ADDRESS);
 
 	for (;;)
 	{
 		zbx_setproctitle("%s [getting values]", get_process_type_string(process_type));
 
 		sec = zbx_time();
-		processed = get_values(poller_type, queue_socket_zmq);
+		processed = get_values(poller_type, &qctx);
 		sec = zbx_time() - sec;
 
 		zabbix_log(LOG_LEVEL_DEBUG, "%s #%d spent " ZBX_FS_DBL " seconds while updating %d values",
@@ -876,7 +877,6 @@ void	main_poller_loop(unsigned char poller_type)
 		zbx_sleep_loop(sleeptime);
 	}
     
-    // clean up zmq stuff
-    zmq_close(queue_socket_zmq);
-    zmq_ctx_destroy(context_zmq);
+    // clean up queue stuff
+    queue_ctx_destroy(&qctx);
 }
