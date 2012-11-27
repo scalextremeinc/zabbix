@@ -450,7 +450,7 @@ static void	deactivate_host(DC_ITEM *item, zbx_timespec_t *ts, const char *error
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
-static int	get_value(DC_ITEM *item, AGENT_RESULT *result, void *queue_socket_zmq)
+static int	get_value(DC_ITEM *item, AGENT_RESULT *result)
 {
 	const char	*__function_name = "get_value";
 	int		res = FAIL;
@@ -754,7 +754,7 @@ static int	get_values(unsigned char poller_type, struct queue_ctx* qctx)
 	{
 		if (SUCCEED == errcodes[0])
 		{
-			errcodes[0] = get_value(&items[0], &results[0], queue_socket_zmq);
+			errcodes[0] = get_value(&items[0], &results[0]);
 			zbx_timespec(&timespecs[0]);
 		}
 	}

@@ -282,7 +282,8 @@ DIST_SUBDIRS = \
 	zbxserver \
 	zbxicmpping \
 	zbxexec \
-	zbxself
+	zbxself \
+	queue
 
 @PROXY_TRUE@PROXY_SUBDIRS = \
 @PROXY_TRUE@	zbxcommshigh \
@@ -317,6 +318,7 @@ SUBDIRS = \
 	zbxcomms \
 	zbxjson \
 	zbxexec \
+	queue \
 	$(PROXY_SUBDIRS) \
 	$(SERVER_SUBDIRS)
 

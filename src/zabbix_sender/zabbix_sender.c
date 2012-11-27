@@ -27,8 +27,8 @@
 #include "zbxjson.h"
 
 // used by agent - required for comms linking
-char *CONFIG_HOSTNAME;
-char *CONFIG_MODE;
+char *CONFIG_HOSTNAME = "";
+char *CONFIG_MODE = "";
 
 const char	*progname = NULL;
 const char	title_message[] = "Zabbix Sender";

@@ -4504,7 +4504,8 @@ for ac_header in stdio.h stdlib.h string.h unistd.h netdb.h signal.h \
   sys/resource.h pthread.h windows.h process.h conio.h sys/wait.h regex.h \
   stdarg.h winsock2.h pdh.h psapi.h sys/sem.h sys/ipc.h sys/shm.h Winldap.h \
   sys/timeb.h Winber.h lber.h ws2tcpip.h inttypes.h sys/file.h grp.h \
-  execinfo.h libperfstat.h sys/systemcfg.h sys/mnttab.h mntent.h sys/times.h
+  execinfo.h libperfstat.h sys/systemcfg.h sys/mnttab.h mntent.h sys/times.h \
+  zmq.h
 do :
   as_ac_Header=`$as_echo "ac_cv_header_$ac_header" | $as_tr_sh`
 ac_fn_c_check_header_mongrel "$LINENO" "$ac_header" "$as_ac_Header" "$ac_includes_default"
@@ -4926,6 +4927,62 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_SSL_library_init" >&5
 $as_echo "$ac_cv_search_SSL_library_init" >&6; }
 ac_res=$ac_cv_search_SSL_library_init
+if test "$ac_res" != no; then :
+  test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
+
+fi
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for library containing zmq_ctx_new" >&5
+$as_echo_n "checking for library containing zmq_ctx_new... " >&6; }
+if ${ac_cv_search_zmq_ctx_new+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  ac_func_search_save_LIBS=$LIBS
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char zmq_ctx_new ();
+int
+main ()
+{
+return zmq_ctx_new ();
+  ;
+  return 0;
+}
+_ACEOF
+for ac_lib in '' zmq; do
+  if test -z "$ac_lib"; then
+    ac_res="none required"
+  else
+    ac_res=-l$ac_lib
+    LIBS="-l$ac_lib  $ac_func_search_save_LIBS"
+  fi
+  if ac_fn_c_try_link "$LINENO"; then :
+  ac_cv_search_zmq_ctx_new=$ac_res
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext
+  if ${ac_cv_search_zmq_ctx_new+:} false; then :
+  break
+fi
+done
+if ${ac_cv_search_zmq_ctx_new+:} false; then :
+
+else
+  ac_cv_search_zmq_ctx_new=no
+fi
+rm conftest.$ac_ext
+LIBS=$ac_func_search_save_LIBS
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_cv_search_zmq_ctx_new" >&5
+$as_echo "$ac_cv_search_zmq_ctx_new" >&6; }
+ac_res=$ac_cv_search_zmq_ctx_new
 if test "$ac_res" != no; then :
   test "$ac_res" = "none required" || LIBS="$ac_res $LIBS"
 
@@ -10879,7 +10936,7 @@ fi
 $as_echo "ok (${MKDIR_P})" >&6; }
 
 
-ac_config_files="$ac_config_files Makefile database/Makefile misc/Makefile src/Makefile src/libs/Makefile src/libs/zbxlog/Makefile src/libs/zbxalgo/Makefile src/libs/zbxmemory/Makefile src/libs/zbxcrypto/Makefile src/libs/zbxconf/Makefile src/libs/zbxdbcache/Makefile src/libs/zbxdbhigh/Makefile src/libs/zbxmedia/Makefile src/libs/zbxsysinfo/Makefile src/libs/zbxcommon/Makefile src/libs/zbxsysinfo/agent/Makefile src/libs/zbxsysinfo/common/Makefile src/libs/zbxsysinfo/simple/Makefile src/libs/zbxsysinfo/linux/Makefile src/libs/zbxsysinfo/aix/Makefile src/libs/zbxsysinfo/freebsd/Makefile src/libs/zbxsysinfo/hpux/Makefile src/libs/zbxsysinfo/openbsd/Makefile src/libs/zbxsysinfo/osx/Makefile src/libs/zbxsysinfo/solaris/Makefile src/libs/zbxsysinfo/osf/Makefile src/libs/zbxsysinfo/netbsd/Makefile src/libs/zbxsysinfo/unknown/Makefile src/libs/zbxnix/Makefile src/libs/zbxsys/Makefile src/libs/zbxcomms/Makefile src/libs/zbxcommshigh/Makefile src/libs/zbxdb/Makefile src/libs/zbxjson/Makefile src/libs/zbxserver/Makefile src/libs/zbxicmpping/Makefile src/libs/zbxexec/Makefile src/libs/zbxself/Makefile src/zabbix_agent/Makefile src/zabbix_get/Makefile src/zabbix_sender/Makefile src/zabbix_server/Makefile src/zabbix_server/alerter/Makefile src/zabbix_server/dbsyncer/Makefile src/zabbix_server/dbconfig/Makefile src/zabbix_server/discoverer/Makefile src/zabbix_server/housekeeper/Makefile src/zabbix_server/httppoller/Makefile src/zabbix_server/nodewatcher/Makefile src/zabbix_server/pinger/Makefile src/zabbix_server/poller/Makefile src/zabbix_server/snmptrapper/Makefile src/zabbix_server/timer/Makefile src/zabbix_server/trapper/Makefile src/zabbix_server/utils/Makefile src/zabbix_server/watchdog/Makefile src/zabbix_server/escalator/Makefile src/zabbix_server/proxypoller/Makefile src/zabbix_server/selfmon/Makefile src/zabbix_proxy/Makefile src/zabbix_proxy/heart/Makefile src/zabbix_proxy/housekeeper/Makefile src/zabbix_proxy/proxyconfig/Makefile src/zabbix_proxy/datasender/Makefile src/zabbix_java/Makefile upgrades/Makefile man/Makefile"
+ac_config_files="$ac_config_files Makefile database/Makefile misc/Makefile src/Makefile src/libs/Makefile src/libs/zbxlog/Makefile src/libs/zbxalgo/Makefile src/libs/zbxmemory/Makefile src/libs/zbxcrypto/Makefile src/libs/zbxconf/Makefile src/libs/zbxdbcache/Makefile src/libs/zbxdbhigh/Makefile src/libs/zbxmedia/Makefile src/libs/zbxsysinfo/Makefile src/libs/zbxcommon/Makefile src/libs/zbxsysinfo/agent/Makefile src/libs/zbxsysinfo/common/Makefile src/libs/zbxsysinfo/simple/Makefile src/libs/zbxsysinfo/linux/Makefile src/libs/zbxsysinfo/aix/Makefile src/libs/zbxsysinfo/freebsd/Makefile src/libs/zbxsysinfo/hpux/Makefile src/libs/zbxsysinfo/openbsd/Makefile src/libs/zbxsysinfo/osx/Makefile src/libs/zbxsysinfo/solaris/Makefile src/libs/zbxsysinfo/osf/Makefile src/libs/zbxsysinfo/netbsd/Makefile src/libs/zbxsysinfo/unknown/Makefile src/libs/zbxnix/Makefile src/libs/zbxsys/Makefile src/libs/zbxcomms/Makefile src/libs/zbxcommshigh/Makefile src/libs/zbxdb/Makefile src/libs/zbxjson/Makefile src/libs/zbxserver/Makefile src/libs/zbxicmpping/Makefile src/libs/zbxexec/Makefile src/libs/zbxself/Makefile src/libs/queue/Makefile src/zabbix_agent/Makefile src/zabbix_get/Makefile src/zabbix_sender/Makefile src/zabbix_server/Makefile src/zabbix_server/alerter/Makefile src/zabbix_server/dbsyncer/Makefile src/zabbix_server/dbconfig/Makefile src/zabbix_server/discoverer/Makefile src/zabbix_server/housekeeper/Makefile src/zabbix_server/httppoller/Makefile src/zabbix_server/nodewatcher/Makefile src/zabbix_server/pinger/Makefile src/zabbix_server/poller/Makefile src/zabbix_server/snmptrapper/Makefile src/zabbix_server/timer/Makefile src/zabbix_server/trapper/Makefile src/zabbix_server/utils/Makefile src/zabbix_server/watchdog/Makefile src/zabbix_server/escalator/Makefile src/zabbix_server/proxypoller/Makefile src/zabbix_server/selfmon/Makefile src/zabbix_proxy/Makefile src/zabbix_proxy/heart/Makefile src/zabbix_proxy/housekeeper/Makefile src/zabbix_proxy/proxyconfig/Makefile src/zabbix_proxy/datasender/Makefile src/zabbix_java/Makefile upgrades/Makefile man/Makefile"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -11674,6 +11731,7 @@ do
     "src/libs/zbxicmpping/Makefile") CONFIG_FILES="$CONFIG_FILES src/libs/zbxicmpping/Makefile" ;;
     "src/libs/zbxexec/Makefile") CONFIG_FILES="$CONFIG_FILES src/libs/zbxexec/Makefile" ;;
     "src/libs/zbxself/Makefile") CONFIG_FILES="$CONFIG_FILES src/libs/zbxself/Makefile" ;;
+    "src/libs/queue/Makefile") CONFIG_FILES="$CONFIG_FILES src/libs/queue/Makefile" ;;
     "src/zabbix_agent/Makefile") CONFIG_FILES="$CONFIG_FILES src/zabbix_agent/Makefile" ;;
     "src/zabbix_get/Makefile") CONFIG_FILES="$CONFIG_FILES src/zabbix_get/Makefile" ;;
     "src/zabbix_sender/Makefile") CONFIG_FILES="$CONFIG_FILES src/zabbix_sender/Makefile" ;;

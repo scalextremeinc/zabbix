@@ -104,8 +104,8 @@ int		process_num		= 0;
 unsigned char	process_type		= ZBX_PROCESS_TYPE_UNKNOWN;
 
 // used by agent - required for comms linking
-char *CONFIG_HOSTNAME;
-char *CONFIG_MODE;
+char *CONFIG_HOSTNAME = "";
+char *CONFIG_MODE = "";
 
 int	CONFIG_ALERTER_FORKS		= 1;
 int	CONFIG_DISCOVERER_FORKS		= 1;
