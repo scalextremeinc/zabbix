@@ -27,6 +27,7 @@
 #include "http.h"
 
 #define ZBX_MAX_WEBPAGE_SIZE	(1 * 1024 * 1024)
+#define SSL_PORT 443
 
 static int	get_http_page(const char *host, const char *path, unsigned short port, char *buffer, int max_buffer_len)
 {
@@ -35,26 +36,52 @@ static int	get_http_page(const char *host, const char *path, unsigned short port
 	char		request[MAX_STRING_LEN];
 	zbx_sock_t	s;
 
-	if (SUCCEED == (ret = zbx_tcp_connect(&s, CONFIG_SOURCE_IP, host, port, CONFIG_TIMEOUT)))
-	{
-		zbx_snprintf(request, sizeof(request),
-				"GET /%s HTTP/1.1\r\n"
-				"Host: %s\r\n"
-				"Connection: close\r\n"
-				"\r\n",
-				path, host);
+    if( port != SSL_PORT )
+    {
+        if (SUCCEED == (ret = zbx_org_tcp_connect(&s, CONFIG_SOURCE_IP, host, port, CONFIG_TIMEOUT)))
+        {
+            zbx_snprintf(request, sizeof(request),
+                    "GET /%s HTTP/1.1\r\n"
+                    "Host: %s\r\n"
+                    "Connection: close\r\n"
+                    "\r\n",
+                    path, host);
 
-		if (SUCCEED == (ret = zbx_tcp_send_raw(&s, request)))
-		{
-			if (SUCCEED == (ret = SUCCEED_OR_FAIL(zbx_tcp_recv_ext(&s, &recv_buffer, ZBX_TCP_READ_UNTIL_CLOSE, 0))))
-			{
-				if (NULL != buffer)
-					zbx_strlcpy(buffer, recv_buffer, max_buffer_len);
-			}
-		}
+            if (SUCCEED == (ret = zbx_tcp_send_raw(&s, request)))
+            {
+                if (SUCCEED == (ret = SUCCEED_OR_FAIL(zbx_org_tcp_recv_ext(&s, &recv_buffer, ZBX_TCP_READ_UNTIL_CLOSE, 0))))
+                {
+                    if (NULL != buffer)
+                        zbx_strlcpy(buffer, recv_buffer, max_buffer_len);
+                }
+            }
 
-		zbx_tcp_close(&s);
-	}
+            zbx_tcp_close(&s);
+        }
+    }
+    else
+    {
+        if (SUCCEED == (ret = zbx_tcp_connect(&s, CONFIG_SOURCE_IP, host, port, CONFIG_TIMEOUT)))
+        {
+            zbx_snprintf(request, sizeof(request),
+                    "GET /%s HTTP/1.1\r\n"
+                    "Host: %s\r\n"
+                    "Connection: close\r\n"
+                    "\r\n",
+                    path, host);
+
+            if (SUCCEED == (ret = zbx_tcp_send_raw(&s, request)))
+            {
+                if (SUCCEED == (ret = SUCCEED_OR_FAIL(zbx_tcp_recv_ext(&s, &recv_buffer, ZBX_TCP_READ_UNTIL_CLOSE, 0))))
+                {
+                    if (NULL != buffer)
+                        zbx_strlcpy(buffer, recv_buffer, max_buffer_len);
+                }
+            }
+
+            zbx_tcp_close(&s);
+        }
+    }
 
 	if (FAIL == ret)
 	{
