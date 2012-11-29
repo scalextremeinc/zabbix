@@ -133,6 +133,8 @@ AC_SEARCH_LIBS(gethostbyname, nsl)
 AC_SEARCH_LIBS(clock_gettime, rt)
 AC_SEARCH_LIBS(SSL_library_init, ssl)
 AC_SEARCH_LIBS(zmq_ctx_new, zmq)
+AC_SEARCH_LIBS(MD5_Init, crypto)
+AC_SEARCH_LIBS(iconv, iconv)
 
 dnl AIX
 AC_SEARCH_LIBS(perfstat_memory_total, perfstat, [AC_DEFINE([HAVE_LIBPERFSTAT], 1, [Define to 1 if you have the 'libperfstat' library (-lperfstat)])])

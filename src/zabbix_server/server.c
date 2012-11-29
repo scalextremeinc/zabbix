@@ -189,6 +189,8 @@ int	CONFIG_PROXYDATA_FREQUENCY	= 1;	/* 1s */
 
 #ifdef HAVE_QUEUE
 char* CONFIG_ZMQ_QUEUE_ADDRESS = NULL;
+char* CONFIG_ZMQ_ERRQUEUE_ADDRESS = NULL;
+char* CONFIG_ZMQ_QUEUE_RECOVERY_DIR = NULL;
 #endif
 
 /* mutex for node syncs */
@@ -395,6 +397,10 @@ static void	zbx_load_config()
 			PARM_OPT,	1,			SEC_PER_HOUR},
 #ifdef HAVE_QUEUE
         {"ZmqQueueAddress",		&CONFIG_ZMQ_QUEUE_ADDRESS,		TYPE_STRING,
+			PARM_MAND,	0,			0},
+        {"ZmqErrQueueAddress",		&CONFIG_ZMQ_ERRQUEUE_ADDRESS,		TYPE_STRING,
+			PARM_OPT,	0,			0},
+        {"ZmqQueueRecoveryDir",		&CONFIG_ZMQ_QUEUE_RECOVERY_DIR,		TYPE_STRING,
 			PARM_MAND,	0,			0},
 #endif
 		{NULL}
