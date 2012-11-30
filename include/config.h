@@ -266,7 +266,7 @@
 #define HAVE_PWD_H 1
 
 /* Define to 1 if queue should be enabled. */
-#define HAVE_QUEUE 1
+/* #undef HAVE_QUEUE */
 
 /* Define to 1 if you have the <regex.h> header file. */
 #define HAVE_REGEX_H 1

@@ -399,7 +399,7 @@ static void	zbx_load_config()
         {"ZmqQueueAddress",		&CONFIG_ZMQ_QUEUE_ADDRESS,		TYPE_STRING,
 			PARM_MAND,	0,			0},
         {"ZmqErrQueueAddress",		&CONFIG_ZMQ_ERRQUEUE_ADDRESS,		TYPE_STRING,
-			PARM_OPT,	0,			0},
+			PARM_MAND,	0,			0},
         {"ZmqQueueRecoveryDir",		&CONFIG_ZMQ_QUEUE_RECOVERY_DIR,		TYPE_STRING,
 			PARM_MAND,	0,			0},
 #endif
