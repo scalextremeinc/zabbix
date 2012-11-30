@@ -109,7 +109,7 @@ void __build_error_msg(struct queue_ctx* ctx, struct zbx_json *j) {
     zbx_json_init(j, 256);
     zbx_json_addstring(j, "error", "Zabbix: unable to send to zmq queue", ZBX_JSON_TYPE_STRING);
     zbx_json_addstring(j, "source", ctx->name, ZBX_JSON_TYPE_STRING);
-    zbx_json_addstring(j, "recovery_file", ctx->recovery_file, ZBX_JSON_TYPE_STRING);
+    zbx_json_addstring(j, "recovery", ctx->recovery_file, ZBX_JSON_TYPE_STRING);
 }
 
 ssize_t __write_all(int fd, const void* buf, size_t count) {
