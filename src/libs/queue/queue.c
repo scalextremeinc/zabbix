@@ -44,6 +44,8 @@ void queue_ctx_destroy(struct queue_ctx* ctx) {
         zmq_close(ctx->zmq_sock_err);
     zmq_ctx_destroy(ctx->zmq_ctx);
     free(ctx->recovery_file);
+    if (ctx->recovery_fd != -1)
+        close(ctx->recovery_fd);
 }
 
 void queue_sock_connect_msg(struct queue_ctx* ctx, const char* queue_addr_msg) {
