@@ -8,6 +8,7 @@ struct queue_ctx {
     short prev_status;
     int recovery_fd;
     char* recovery_file;
+    char* name;
 };
 
 void queue_ctx_init(struct queue_ctx* ctx, const char* recovery_dir);
