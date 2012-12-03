@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <zmq.h>
 
@@ -27,14 +27,18 @@ void queue_ctx_init(struct queue_ctx* ctx, const char* recovery_dir) {
     
     // create recovery file name
     size_t len = strlen(recovery_dir);
-    char* name = (char*) malloc(300 * sizeof(char));
+    char* node_name = (char*) malloc(250 * sizeof(char));
+    char* worker_name = (char*) malloc(300 * sizeof(char));
     char* recovery_file = (char*) malloc((311 + len) * sizeof(char));
     memcpy(recovery_file, recovery_dir, len);
     char hostname[250];
     gethostname(hostname, 250);
-    zbx_snprintf(name, 300, "zabbix-%s-%d", hostname, (int) getpid());
-    zbx_snprintf(recovery_file + len, 311, "/%s.recovery", name);
-    ctx->name = name;
+    zbx_snprintf(node_name, 250, "zabbix-%s", hostname);
+    zbx_snprintf(worker_name, 300, "%s-%d", node_name, (int) getpid());
+    zbx_snprintf(recovery_file + len, 311, "/%s.recovery", worker_name);
+    ctx->node_name = node_name;
+    ctx->worker_name = worker_name;
+    ctx->recovery_dir = recovery_dir;
     ctx->recovery_file = recovery_file;
 }
 
@@ -43,6 +47,8 @@ void queue_ctx_destroy(struct queue_ctx* ctx) {
     if (ctx->zmq_sock_err != NULL)
         zmq_close(ctx->zmq_sock_err);
     zmq_ctx_destroy(ctx->zmq_ctx);
+    free(ctx->node_name);
+    free(ctx->worker_name);
     free(ctx->recovery_file);
     if (ctx->recovery_fd != -1)
         close(ctx->recovery_fd);
@@ -109,9 +115,10 @@ int queue_msg_send(void* zmq_sock, const char* msg) {
 
 void __build_error_msg(struct queue_ctx* ctx, struct zbx_json *j) {
     zbx_json_init(j, 256);
-    zbx_json_addstring(j, "error", "Zabbix: unable to send to zmq queue", ZBX_JSON_TYPE_STRING);
-    zbx_json_addstring(j, "source", ctx->name, ZBX_JSON_TYPE_STRING);
-    zbx_json_addstring(j, "recovery", ctx->recovery_file, ZBX_JSON_TYPE_STRING);
+    zbx_json_addstring(j, "error", "Zabbix unable to send to zmq queue", ZBX_JSON_TYPE_STRING);
+    zbx_json_addstring(j, "node", ctx->node_name, ZBX_JSON_TYPE_STRING);
+    zbx_json_addstring(j, "worker", ctx->worker_name, ZBX_JSON_TYPE_STRING);
+    zbx_json_addstring(j, "recovery", ctx->recovery_dir, ZBX_JSON_TYPE_STRING);
 }
 
 ssize_t __write_all(int fd, const void* buf, size_t count) {
