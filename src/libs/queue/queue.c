@@ -29,13 +29,13 @@ void queue_ctx_init(struct queue_ctx* ctx, const char* recovery_dir) {
     size_t len = strlen(recovery_dir);
     char* node_name = (char*) malloc(250 * sizeof(char));
     char* worker_name = (char*) malloc(300 * sizeof(char));
-    char* recovery_file = (char*) malloc((311 + len) * sizeof(char));
+    char* recovery_file = (char*) malloc((310 + len) * sizeof(char));
     memcpy(recovery_file, recovery_dir, len);
     char hostname[250];
     gethostname(hostname, 250);
     zbx_snprintf(node_name, 250, "zabbix-%s", hostname);
     zbx_snprintf(worker_name, 300, "%s-%d", node_name, (int) getpid());
-    zbx_snprintf(recovery_file + len, 311, "/%s.recovery", worker_name);
+    zbx_snprintf(recovery_file + len, 310, "/%s.zbx.rec", worker_name);
     ctx->node_name = node_name;
     ctx->worker_name = worker_name;
     ctx->recovery_dir = recovery_dir;
