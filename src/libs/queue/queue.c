@@ -312,7 +312,8 @@ void queue_msg_send_error(struct queue_ctx* ctx, const char* msg) {
             S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     }
     if (ctx->recovery_fd == -1) {
-        zabbix_log(LOG_LEVEL_ERR, "Error opening recovery file: %s", ctx->recovery_file);
+        zabbix_log(LOG_LEVEL_ERR, "Error opening recovery, file: %s, error: %s",
+            ctx->recovery_file, strerror(errno));
         return;
     }
     
