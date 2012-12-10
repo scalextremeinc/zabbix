@@ -5,15 +5,18 @@ struct queue_ctx {
     void* zmq_ctx;
     void* zmq_sock_msg;
     void* zmq_sock_err;
+    // ZMQ_DELAY_ATTACH_ON_CONNECT
+    int zmq_daoc;
     short prev_status;
     char* node_name;
     char* worker_name;
     char* recovery_dir;
     char* recovery_file;
     int recovery_fd;
+    int pid;
 };
 
-void queue_ctx_init(struct queue_ctx* ctx, const char* recovery_dir);
+void queue_ctx_init(struct queue_ctx* ctx, const char* recovery_dir, int zmq_daoc);
 
 void queue_ctx_destroy(struct queue_ctx* ctx);
 

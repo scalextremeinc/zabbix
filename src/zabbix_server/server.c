@@ -191,6 +191,7 @@ int	CONFIG_PROXYDATA_FREQUENCY	= 1;	/* 1s */
 char* CONFIG_ZMQ_QUEUE_ADDRESS = NULL;
 char* CONFIG_ZMQ_ERRQUEUE_ADDRESS = NULL;
 char* CONFIG_ZMQ_QUEUE_RECOVERY_DIR = NULL;
+int CONFIG_ZMQ_DAOC = 0;
 #endif
 
 /* mutex for node syncs */
@@ -402,6 +403,9 @@ static void	zbx_load_config()
 			PARM_MAND,	0,			0},
         {"ZmqQueueRecoveryDir",		&CONFIG_ZMQ_QUEUE_RECOVERY_DIR,		TYPE_STRING,
 			PARM_MAND,	0,			0},
+        // use sock opt ZMQ_DELAY_ATTACH_ON_CONNECT
+        {"ZmqQueueDaoc",		&CONFIG_ZMQ_DAOC,		TYPE_INT,
+			PARM_OPT,	0,			1},
 #endif
 		{NULL}
 	};

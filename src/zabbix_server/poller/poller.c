@@ -50,6 +50,7 @@
 extern char* CONFIG_ZMQ_QUEUE_ADDRESS;
 extern char* CONFIG_ZMQ_ERRQUEUE_ADDRESS;
 extern char* CONFIG_ZMQ_QUEUE_RECOVERY_DIR;
+extern int CONFIG_ZMQ_DAOC;
 #endif
 
 #define MAX_BUNCH_ITEMS	32
@@ -867,7 +868,7 @@ void	main_poller_loop(unsigned char poller_type)
 #ifdef HAVE_QUEUE
     // connect to zmq queue
     struct queue_ctx qctx;
-    queue_ctx_init(&qctx, CONFIG_ZMQ_QUEUE_RECOVERY_DIR);
+    queue_ctx_init(&qctx, CONFIG_ZMQ_QUEUE_RECOVERY_DIR, CONFIG_ZMQ_DAOC);
     queue_sock_connect_msg(&qctx, CONFIG_ZMQ_QUEUE_ADDRESS);
     queue_sock_connect_err(&qctx, CONFIG_ZMQ_ERRQUEUE_ADDRESS);
 #endif

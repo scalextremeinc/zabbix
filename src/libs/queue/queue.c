@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <fcntl.h>
@@ -14,9 +15,10 @@
 #include "zbxjson.h"
 
 
-void queue_ctx_init(struct queue_ctx* ctx, const char* recovery_dir) {
+void queue_ctx_init(struct queue_ctx* ctx, const char* recovery_dir, int zmq_daoc) {
     ctx->zmq_sock_msg = NULL;
     ctx->zmq_sock_err = NULL;
+    ctx->zmq_daoc = zmq_daoc;
     ctx->prev_status = 0;
     ctx->recovery_fd = -1;
     ctx->zmq_ctx = zmq_ctx_new();
@@ -26,6 +28,7 @@ void queue_ctx_init(struct queue_ctx* ctx, const char* recovery_dir) {
     }
     
     // create recovery file name
+    ctx->pid = (int) getpid();
     size_t len = strlen(recovery_dir);
     char* node_name = (char*) malloc(250 * sizeof(char));
     char* worker_name = (char*) malloc(300 * sizeof(char));
@@ -34,7 +37,7 @@ void queue_ctx_init(struct queue_ctx* ctx, const char* recovery_dir) {
     char hostname[250];
     gethostname(hostname, 250);
     zbx_snprintf(node_name, 250, "zabbix-%s", hostname);
-    zbx_snprintf(worker_name, 300, "%s-%d", node_name, (int) getpid());
+    zbx_snprintf(worker_name, 300, "%s-%d", node_name, ctx->pid);
     zbx_snprintf(recovery_file + len, 310, "/%s.zbx.rec", worker_name);
     ctx->node_name = node_name;
     ctx->worker_name = worker_name;
@@ -60,6 +63,14 @@ void queue_sock_connect_msg(struct queue_ctx* ctx, const char* queue_addr_msg) {
         zabbix_log(LOG_LEVEL_ERR, "Error creating zmq socket: %s", strerror(errno));
         return;
     }
+    if (ctx->zmq_daoc) {
+        int daoc = 1;
+        if (zmq_setsockopt(ctx->zmq_sock_msg, ZMQ_DELAY_ATTACH_ON_CONNECT,
+                &daoc, sizeof(daoc)) == -1) {
+            zabbix_log(LOG_LEVEL_ERR, "Error setting ZMQ_DELAY_ATTACH_ON_CONNECT: %s",
+                strerror(errno));
+        }
+    }
     if (zmq_connect(ctx->zmq_sock_msg, queue_addr_msg) == -1) {
         zabbix_log(LOG_LEVEL_ERR, "Error connecting to zmq socket: %s, error: %s",
             queue_addr_msg, strerror(errno));
@@ -72,10 +83,18 @@ void queue_sock_connect_err(struct queue_ctx* ctx, const char* queue_addr_err) {
         zabbix_log(LOG_LEVEL_ERR, "Error creating zmq socket: %s", strerror(errno));
         return;
     }
-    int hwm = 0;
+    int hwm = 100;
     if (zmq_setsockopt(ctx->zmq_sock_err, ZMQ_SNDHWM, &hwm, sizeof(hwm)) == -1) {
         zabbix_log(LOG_LEVEL_ERR, "Error setting zmq high watter mark on err sock: %s",
         strerror(errno));
+    }
+    if (ctx->zmq_daoc) {
+        int daoc = 1;
+        if (zmq_setsockopt(ctx->zmq_sock_err, ZMQ_DELAY_ATTACH_ON_CONNECT,
+                &daoc, sizeof(daoc)) == -1) {
+            zabbix_log(LOG_LEVEL_ERR, "Error setting ZMQ_DELAY_ATTACH_ON_CONNECT: %s",
+                strerror(errno));
+        }
     }
     if (zmq_connect(ctx->zmq_sock_err, queue_addr_err) == -1) {
         zabbix_log(LOG_LEVEL_ERR, "Error connecting to zmq socket: %s, error: %s",
@@ -145,7 +164,7 @@ ssize_t __read_all(int fd, void* buf, size_t count) {
     return count;
 }
 
-void __update_recovery_entry(struct queue_ctx* ctx, long ts, int new_gap) {
+int __update_recovery_entry(struct queue_ctx* ctx, long ts, int new_gap) {
     int ts1, ts2;
     uint32_t net;
     struct flock fl;
@@ -153,42 +172,86 @@ void __update_recovery_entry(struct queue_ctx* ctx, long ts, int new_gap) {
     fl.l_whence = SEEK_SET; // SEEK_SET, SEEK_CUR, SEEK_END
     fl.l_start = 0;         // Offset from l_whence
     fl.l_len = 0;           // length, 0 = to EOF
-    fl.l_pid = getpid();
+    fl.l_pid = ctx->pid;
     
     // obtain file lock, block until the lock has cleared
-    fcntl(ctx->recovery_fd, F_SETLKW, &fl);
+    if (fcntl(ctx->recovery_fd, F_SETLKW, &fl) == -1) {
+        goto error_lock;
+    }
     
-    size_t size = lseek(ctx->recovery_fd, 0, SEEK_END);
+    off_t size = lseek(ctx->recovery_fd, 0, SEEK_END);
+    if (size == -1) {
+        goto error_seek;
+    }
     if (new_gap || size == 0) {
         // beggining of new gap
-        zabbix_log(LOG_LEVEL_DEBUG, "Beginning of new gap");
+        //zabbix_log(LOG_LEVEL_DEBUG, "Beginning of new gap");
         net = htonl((uint32_t) ts);
-        __write_all(ctx->recovery_fd, &net, 4);
-        __write_all(ctx->recovery_fd, &net, 4);
+        if (__write_all(ctx->recovery_fd, &net, 4) == -1) {
+            goto error_write;
+        }
+        if (__write_all(ctx->recovery_fd, &net, 4) == -1) {
+            goto error_write;
+        }
     } else {
         // current gap extends
-        zabbix_log(LOG_LEVEL_DEBUG, "Current gap extends");
-        lseek(ctx->recovery_fd, -8, SEEK_END);
-        __read_all(ctx->recovery_fd, &net, 4);
+        //zabbix_log(LOG_LEVEL_DEBUG, "Current gap extends");
+        if (lseek(ctx->recovery_fd, -8, SEEK_END) == -1) {
+            goto error_seek;
+        }
+        if (__read_all(ctx->recovery_fd, &net, 4) == -1) {
+            goto error_read;
+        }
         ts1 = ntohl(net);
-        __read_all(ctx->recovery_fd, &net, 4);
+        if (__read_all(ctx->recovery_fd, &net, 4) == -1) {
+            goto error_read;
+        }
         ts2 = ntohl(net);
-        zabbix_log(LOG_LEVEL_DEBUG, "Current gap extends, ts1: %d, ts2: %d", ts1, ts2);
+        //zabbix_log(LOG_LEVEL_DEBUG, "Current gap extends, ts1: %d, ts2: %d", ts1, ts2);
         if (ts > ts2) {
             net = htonl((uint32_t) ts);    
-            lseek(ctx->recovery_fd, -4, SEEK_END);
-            __write_all(ctx->recovery_fd, &net, 4);
+            if (lseek(ctx->recovery_fd, -4, SEEK_END) == -1) {
+                goto error_seek;
+            }
+            if (__write_all(ctx->recovery_fd, &net, 4) == -1) {
+                goto error_write;
+            }
         } else if (ts < ts1) {
             net = htonl((uint32_t) ts);
-            lseek(ctx->recovery_fd, -8, SEEK_END);
-            __write_all(ctx->recovery_fd, &net, 4);
+            if (lseek(ctx->recovery_fd, -8, SEEK_END) == -1) {
+                goto error_seek;
+            }
+            if (__write_all(ctx->recovery_fd, &net, 4) == -1) {
+                goto error_write;
+            }
         }
-        zabbix_log(LOG_LEVEL_DEBUG, "Current gap extended, ts1: %d, ts2: %d", ts1, ts2);
+        //zabbix_log(LOG_LEVEL_DEBUG, "Current gap extended, ts1: %d, ts2: %d", ts1, ts2);
     }
     
     // release file lock
     fl.l_type = F_UNLCK;
-    fcntl(ctx->recovery_fd, F_SETLK, &fl);
+    if (fcntl(ctx->recovery_fd, F_SETLK, &fl) == -1) {
+        goto error_lock;
+    }
+    
+    return 0;
+
+error_read:
+    zabbix_log(LOG_LEVEL_ERR, "Error reading recovery, file: %s, error: %s",
+        ctx->recovery_file, strerror(errno));
+    return -1;
+error_write:
+    zabbix_log(LOG_LEVEL_ERR, "Error writing to recovery, file: %s, error: %s",
+        ctx->recovery_file, strerror(errno));
+    return -1;
+error_seek:
+    zabbix_log(LOG_LEVEL_ERR, "Error seek recovery, file: %s, error: %s",
+        ctx->recovery_file, strerror(errno));
+    return -1;
+error_lock:
+    zabbix_log(LOG_LEVEL_ERR, "Error locking/unlocking recovery, file: %s, error: %s",
+        ctx->recovery_file, strerror(errno));
+    return -1;
 }
 
 void __update_recovery(struct queue_ctx* ctx, const char* msg) {
