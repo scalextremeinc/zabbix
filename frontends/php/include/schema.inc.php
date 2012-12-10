@@ -2202,8 +2202,8 @@ return array(
 			),
 			'description' => array(
 				'null' => false,
-				'type' => DB::FIELD_TYPE_CHAR,
-				'length' => 255,
+				'type' => DB::FIELD_TYPE_TEXT,
+				'length' => 65535,
 				'default' => '',
 			),
 			'url' => array(
