@@ -119,10 +119,12 @@ int	process_event(zbx_uint64_t eventid, int source, int object, zbx_uint64_t obj
 		if (SUCCEED != add_trigger_info(&event))
 			goto fail;
 
+	if (0 == event.eventid)
+		event.eventid = DBget_maxid("events");
 
-	DBexecute("insert into events (source,object,objectid,clock,ns,value,value_changed)"
-			" values (%d,%d," ZBX_FS_UI64 ",%d,%d,%d,%d)",
-			 event.source, event.object, event.objectid, event.clock, event.ns,
+	DBexecute("insert into events (eventid,source,object,objectid,clock,ns,value,value_changed)"
+			" values (" ZBX_FS_UI64 ",%d,%d," ZBX_FS_UI64 ",%d,%d,%d,%d)",
+			event.eventid, event.source, event.object, event.objectid, event.clock, event.ns,
 			event.value, (int)event.value_changed);
 
 	if (TRIGGER_VALUE_CHANGED_YES == event.value_changed || 1 == force_actions)

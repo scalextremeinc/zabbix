@@ -1429,8 +1429,7 @@ zbx_uint64_t	DBget_maxid_num(const char *tablename, int num)
 			0 == strcmp(tablename, "escalations") ||
 			0 == strcmp(tablename, "autoreg_host") ||
 			0 == strcmp(tablename, "graph_discovery") ||
-			0 == strcmp(tablename, "trigger_discovery") ||
-			0 == strcmp(tablename, "events"))
+			0 == strcmp(tablename, "trigger_discovery"))
 		return DCget_nextid(tablename, num);
 
 	return DBget_nextid(tablename, num);

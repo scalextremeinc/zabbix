@@ -245,12 +245,17 @@ void	DCflush_nextchecks()
 
 		if (0 != events_num)
 		{
+			zbx_uint64_t	eventid;
+
+			eventid = DBget_maxid_num("events", events_num);
+
 			for (i = 0; i < events_num; i++)
 			{
 				zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
-						"insert into events (source,object,objectid,clock,ns,"
+						"insert into events (eventid,source,object,objectid,clock,ns,"
 							"value,value_changed)"
-						" values (%d,%d," ZBX_FS_UI64 ",%d,%d,%d,%d);\n",
+						" values (" ZBX_FS_UI64 ",%d,%d," ZBX_FS_UI64 ",%d,%d,%d,%d);\n",
+						eventid++,
 						EVENT_SOURCE_TRIGGERS,
 						EVENT_OBJECT_TRIGGER,
 						events[i].objectid,
