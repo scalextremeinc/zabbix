@@ -68,7 +68,7 @@ void	calc_timestamp(char *line, int *timestamp, char *format);
 void	process_mass_data(zbx_sock_t *sock, zbx_uint64_t proxy_hostid,
 		AGENT_VALUE *values, int value_num, int *processed);
 int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
-		const zbx_uint64_t proxy_hostid, char *info, int max_info_size);
+		const zbx_uint64_t proxy_hostid, char *info, int max_info_size, zbx_timespec_t *timediff);
 void	process_dhis_data(struct zbx_json_parse *jp);
 void	process_areg_data(struct zbx_json_parse *jp, zbx_uint64_t proxy_hostid);
 

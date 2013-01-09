@@ -1540,7 +1540,7 @@ static void	clean_agent_values(AGENT_VALUE *values, int value_num)
  *                                                                            *
  ******************************************************************************/
 int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
-		const zbx_uint64_t proxy_hostid, char *info, int max_info_size)
+		const zbx_uint64_t proxy_hostid, char *info, int max_info_size, zbx_timespec_t *timediff)
 {
 #define VALUES_MAX	256
 	const char		*__function_name = "process_hist_data";
@@ -1579,6 +1579,12 @@ int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
 			}
 		}
 	}
+    
+    // fill time diff structure - used by the code which sends data to queue
+    if (timediff != NULL) {
+        timediff->sec = proxy_timediff.sec;
+        timediff->ns = proxy_timediff.ns;
+    }
 
 	/* "data" tag lists the item keys */
 	if (NULL == (p = zbx_json_pair_by_name(jp, ZBX_PROTO_TAG_DATA)))

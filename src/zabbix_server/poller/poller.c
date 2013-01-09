@@ -643,6 +643,7 @@ static int	get_values(unsigned char poller_type)
 	char		*port = NULL, error[ITEM_ERROR_LEN_MAX];
     
     struct zbx_json j;
+    struct zbx_json_parse jp;
         
     zbx_json_init(&j, ZBX_JSON_STAT_BUF_LEN);
 
@@ -797,7 +798,8 @@ static int	get_values(unsigned char poller_type)
 		{
 #ifdef HAVE_QUEUE
             item_to_json(&j, &items[i], &results[i], &timespecs[i]);
-            queue_msg(qctx, j.buffer);
+            zbx_json_open(j.buffer, &jp);
+            queue_msg(qctx, &jp, NULL);
 #endif                
 			dc_add_history(items[i].itemid, items[i].value_type, items[i].flags, &results[i], &timespecs[i],
 					ITEM_STATUS_ACTIVE, NULL, 0, NULL, 0, 0, 0, 0);

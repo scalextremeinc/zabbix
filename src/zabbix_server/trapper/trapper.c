@@ -70,7 +70,8 @@ extern unsigned char	process_type;
  * Comments:                                                                  *
  *                                                                            *
  ******************************************************************************/
-static void	recv_agenthistory(zbx_sock_t *sock, struct zbx_json_parse *jp)
+static void	recv_agenthistory(zbx_sock_t *sock, struct zbx_json_parse *jp,
+    zbx_timespec_t *timediff)
 {
 	const char	*__function_name = "recv_agenthistory";
 	char		info[128];
@@ -78,7 +79,7 @@ static void	recv_agenthistory(zbx_sock_t *sock, struct zbx_json_parse *jp)
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
 
-	ret = process_hist_data(sock, jp, 0, info, sizeof(info));
+	ret = process_hist_data(sock, jp, 0, info, sizeof(info), timediff);
 
 	zbx_send_response(sock, ret, info, CONFIG_TIMEOUT);
 
@@ -118,7 +119,7 @@ static void	recv_proxyhistory(zbx_sock_t *sock, struct zbx_json_parse *jp)
 
 	update_proxy_lastaccess(proxy_hostid);
 
-	ret = process_hist_data(sock, jp, proxy_hostid, info, sizeof(info));
+	ret = process_hist_data(sock, jp, proxy_hostid, info, sizeof(info), NULL);
 exit:
 	zbx_send_response(sock, ret, info, CONFIG_TIMEOUT);
 
@@ -228,6 +229,8 @@ static int	process_trap(zbx_sock_t	*sock, char *s, int max_len)
 	char		value[MAX_STRING_LEN];
 	AGENT_VALUE	av;
 
+    zbx_timespec_t timediff;
+
 	memset(&av, 0, sizeof(AGENT_VALUE));
 
 	zbx_rtrim(s, " \r\n");
@@ -314,10 +317,10 @@ static int	process_trap(zbx_sock_t	*sock, char *s, int max_len)
 				else if (0 == strcmp(value, ZBX_PROTO_VALUE_AGENT_DATA) ||
 					0 == strcmp(value, ZBX_PROTO_VALUE_SENDER_DATA))
 				{
+                    recv_agenthistory(sock, &jp, &timediff);
 #ifdef HAVE_QUEUE
-                    queue_msg(qctx, jp.start);
+                    queue_msg(qctx, &jp, &timediff);
 #endif
-					recv_agenthistory(sock, &jp);
 				}
 				else if (0 == strcmp(value, ZBX_PROTO_VALUE_HISTORY_DATA))
 				{

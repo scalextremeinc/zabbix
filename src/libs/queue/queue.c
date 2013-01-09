@@ -11,8 +11,6 @@
 
 #include "log.h"
 #include "queue.h"
-#include "common.h"
-#include "zbxjson.h"
 
 
 void queue_ctx_init(struct queue_ctx* ctx, const char* recovery_dir, int zmq_daoc) {
@@ -102,13 +100,88 @@ void queue_sock_connect_err(struct queue_ctx* ctx, const char* queue_addr_err) {
     }
 }
 
-void queue_msg(struct queue_ctx* ctx, const char* msg) {
+int __fix_time(struct zbx_json_parse *jp_msg, struct zbx_json *jp_msg_fixed,
+        zbx_timespec_t *timediff) {
+    struct zbx_json_parse jp_data, jp_row;
+    const char	*p;
+    int ret = -1, sec, ns;
+    char *tmp = NULL;
+	size_t tmp_alloc = 0;
+    const size_t BUF_SIZE = 32;
+    char buf[BUF_SIZE];
+    
+    zbx_json_init(jp_msg_fixed, 512);
+    zbx_json_addarray(jp_msg_fixed, ZBX_PROTO_TAG_DATA);
+    
+    zbx_json_value_by_name_dyn(jp_msg, ZBX_PROTO_TAG_CLOCK, &tmp, &tmp_alloc);
+    zbx_json_value_by_name_dyn(jp_msg, ZBX_PROTO_TAG_NS, &tmp, &tmp_alloc);
+    
+    /* "data" tag lists the item keys */
+	if (NULL == (p = zbx_json_pair_by_name(jp_msg, ZBX_PROTO_TAG_DATA)))
+		zabbix_log(LOG_LEVEL_WARNING, "cannot find \"data\" pair");
+	else if (-1 == zbx_json_brackets_open(p, &jp_data))
+		zabbix_log(LOG_LEVEL_WARNING, "cannot process json request: %s", zbx_json_strerror());
+	else
+		ret = 0;
+   
+    p = NULL;
+    while (0 == ret && NULL != (p = zbx_json_next(&jp_data, p))) {
+        if (-1 == (ret = zbx_json_brackets_open(p, &jp_row)))
+			break;
+        
+        if (0 == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_CLOCK, &tmp, &tmp_alloc)) {
+            sec = atoi(tmp) + timediff->sec;
+			if (0 == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_NS, &tmp, &tmp_alloc)) {
+				ns = atoi(tmp) + timediff->ns;
+				if (ns > 999999999)
+					sec++;
+			}
+		} else
+			sec = zbx_time();
+        
+        zbx_json_addobject(jp_msg_fixed, NULL);
+        
+        zbx_snprintf(buf, BUF_SIZE, "%d", sec);
+        zbx_json_addstring(jp_msg_fixed, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
+        
+        if (0 == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_HOST, &tmp, &tmp_alloc)) {
+            zbx_json_addstring(jp_msg_fixed, ZBX_PROTO_TAG_HOST, tmp, ZBX_JSON_TYPE_STRING);
+        }
+        
+		if (0 == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_KEY, &tmp, &tmp_alloc)) {
+            zbx_json_addstring(jp_msg_fixed, ZBX_PROTO_TAG_KEY, tmp, ZBX_JSON_TYPE_STRING);
+        }
+
+		if (0 == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_VALUE, &tmp, &tmp_alloc)) {
+            zbx_json_addstring(jp_msg_fixed, ZBX_PROTO_TAG_VALUE, tmp, ZBX_JSON_TYPE_STRING);
+        }
+        
+        zbx_json_close(jp_msg_fixed);
+    }
+    
+    zbx_free(tmp);
+    
+    return ret;
+}
+
+void queue_msg(struct queue_ctx* ctx, struct zbx_json_parse *jp_msg, zbx_timespec_t *timediff) {
+    struct zbx_json jp_msg_fixed;
+    char *msg = jp_msg->start;
+    if (NULL != timediff) {
+        //zabbix_log(LOG_LEVEL_ERR, "timediff sec: %d, ns: %d", timediff->sec, timediff->ns);
+        if (-1 == __fix_time(jp_msg, &jp_msg_fixed, timediff))
+            zabbix_log(LOG_LEVEL_ERR, "Error fixing timestamps for queue");
+        else
+            msg = jp_msg_fixed.buffer;
+    }
+    
     if (queue_msg_send(ctx->zmq_sock_msg, msg) == -1) {
         queue_msg_send_error(ctx, msg);
         ctx->prev_status = -1;
     } else {
         ctx->prev_status = 0;
     }
+    zbx_json_free(&jp_msg_fixed);
 }
 
 int queue_msg_send(void* zmq_sock, const char* msg) {
