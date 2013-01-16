@@ -267,8 +267,10 @@ int resolveDNS( char * szServerName )
 
     zbx_snprintf( szCommand, 256, "ping -c1 %s  | grep \"PING\"", szServerName );
     fp = popen( szCommand, "r");
-    if (fp == NULL)
+    if (fp == NULL) {
+        zabbix_log(LOG_LEVEL_INFORMATION, ">> popen failed: %s: %s\n", szCommand, szResult);
         return -1;
+    }
     if( fgets(szResult, 256, fp) != NULL)
     {
         char szPattern[128];
@@ -279,8 +281,14 @@ int resolveDNS( char * szServerName )
             pclose(fp);
             return -1;
         }
+    } else {
+        zabbix_log(LOG_LEVEL_INFORMATION, ">> fgets failed: %s: %s\n", szCommand, szResult);
     }
+
     status = pclose(fp);
+    if (status<0) {
+        zabbix_log(LOG_LEVEL_INFORMATION, ">> pclose failed: %s: %s\n", szCommand, szResult);
+    }
 #endif
     return status;
 }
