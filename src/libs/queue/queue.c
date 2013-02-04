@@ -113,8 +113,8 @@ int __fix_time(struct zbx_json_parse *jp_msg, struct zbx_json *jp_msg_fixed,
     zbx_json_init(jp_msg_fixed, 512);
     zbx_json_addarray(jp_msg_fixed, ZBX_PROTO_TAG_DATA);
     
-    zbx_json_value_by_name_dyn(jp_msg, ZBX_PROTO_TAG_CLOCK, &tmp, &tmp_alloc);
-    zbx_json_value_by_name_dyn(jp_msg, ZBX_PROTO_TAG_NS, &tmp, &tmp_alloc);
+    //zbx_json_value_by_name_dyn(jp_msg, ZBX_PROTO_TAG_CLOCK, &tmp, &tmp_alloc);
+    //zbx_json_value_by_name_dyn(jp_msg, ZBX_PROTO_TAG_NS, &tmp, &tmp_alloc);
     
     /* "data" tag lists the item keys */
 	if (NULL == (p = zbx_json_pair_by_name(jp_msg, ZBX_PROTO_TAG_DATA)))
@@ -181,7 +181,10 @@ void queue_msg(struct queue_ctx* ctx, struct zbx_json_parse *jp_msg, zbx_timespe
     } else {
         ctx->prev_status = 0;
     }
-    zbx_json_free(&jp_msg_fixed);
+    
+    if (NULL != timediff) {
+        zbx_json_free(&jp_msg_fixed);
+    }
 }
 
 int queue_msg_send(void* zmq_sock, const char* msg) {
