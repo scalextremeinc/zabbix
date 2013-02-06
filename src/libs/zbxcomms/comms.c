@@ -283,6 +283,7 @@ int resolveDNS( char * szServerName )
         }
     } else {
         zabbix_log(LOG_LEVEL_INFORMATION, ">> fgets failed: %s: %s\n", szCommand, szResult);
+        pclose(fp);
         return -1;
     }
 
