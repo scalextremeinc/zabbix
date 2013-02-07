@@ -265,7 +265,7 @@ int resolveDNS( char * szServerName )
     char szResult[256];
     memset( szResult, 0, 256 );
 
-    zbx_snprintf( szCommand, 256, "ping -c1 %s  | grep \"PING\"", szServerName );
+    zbx_snprintf( szCommand, 256, "ping -w1 -c1 %s  | grep \"PING\"", szServerName );
     fp = popen( szCommand, "r");
     if (fp == NULL) {
         zabbix_log(LOG_LEVEL_INFORMATION, ">> popen failed: %s: %s\n", szCommand, szResult);
@@ -601,6 +601,7 @@ int zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsign
         if ( resolveDNS( szServerName ) < 0 )
         {
             zabbix_log( LOG_LEVEL_INFORMATION, ">> ServerName failed to resolve!: %s\n", ip );
+            zabbix_log( LOG_LEVEL_INFORMATION, ">> passing name to ssl lib: %s\n", szServerName );
         }
         zbx_snprintf(szService, 256, "%s:%d", szServerName, port );
         return sx_ssl_connect( s, szService );
