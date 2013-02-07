@@ -277,7 +277,7 @@ int resolveDNS( char * szServerName )
         zbx_snprintf( szPattern, 128, "PING %s (%[^)]", szServerName );
         if( sscanf( szResult, szPattern, szServerName ) != 1 )
         {
-            zabbix_log( LOG_LEVEL_INFORMATION, ">> %s: %s\n", szCommand, szResult );
+            zabbix_log( LOG_LEVEL_INFORMATION, ">> sscanf failed %s: %s\n", szCommand, szResult );
             pclose(fp);
             return -1;
         }
@@ -588,8 +588,8 @@ int zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsign
 {
     if( strcmp(CONFIG_MODE, "https") == 0 )
     {
-        char szService[256];
-        char        szServerName[256];
+        char szService[300];
+        char szBuffer[256];
 
         ZBX_TCP_START();
         zbx_tcp_clean(s);
@@ -597,13 +597,16 @@ int zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsign
         if (0 != timeout)
             zbx_tcp_timeout_set(s, timeout);
 
-        zbx_snprintf( szServerName, 256, "%s", ip );
-        if ( resolveDNS( szServerName ) < 0 )
+        zbx_snprintf( szBuffer, 256, "%s", ip );
+        if ( resolveDNS( szBuffer ) < 0 )
         {
-            zabbix_log( LOG_LEVEL_INFORMATION, ">> ServerName failed to resolve!: %s\n", ip );
-            zabbix_log( LOG_LEVEL_INFORMATION, ">> passing name to ssl lib: %s\n", szServerName );
+            zabbix_log( LOG_LEVEL_INFORMATION, ">> ping resolve failed: %s\n", ip );
+            zbx_snprintf(szService, 300, "%s:%d", ip, port );
+            zabbix_log( LOG_LEVEL_INFORMATION, ">> passing name to ssl lib: %s\n", szService );
+        } else {
+            zbx_snprintf(szService, 300, "%s:%d", szBuffer, port );
         }
-        zbx_snprintf(szService, 256, "%s:%d", szServerName, port );
+
         return sx_ssl_connect( s, szService );
     }
     else
