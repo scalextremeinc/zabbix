@@ -72,6 +72,7 @@ extern int	CONFIG_DATASENDER_FORKS;
 extern int	CONFIG_CONFSYNCER_FORKS;
 extern int	CONFIG_HEARTBEAT_FORKS;
 extern int	CONFIG_SELFMON_FORKS;
+extern int	CONFIG_HISTSYNCER_TRENDS_FORKS;
 
 /******************************************************************************
  *                                                                            *
@@ -132,6 +133,8 @@ int	get_process_type_forks(unsigned char process_type)
 			return CONFIG_HEARTBEAT_FORKS;
 		case ZBX_PROCESS_TYPE_SELFMON:
 			return CONFIG_SELFMON_FORKS;
+        case ZBX_PROCESS_TYPE_HISTSYNCER_TRENDS:
+			return CONFIG_HISTSYNCER_TRENDS_FORKS;
 	}
 
 	assert(0);
@@ -197,6 +200,8 @@ const char	*get_process_type_string(unsigned char process_type)
 			return "heartbeat sender";
 		case ZBX_PROCESS_TYPE_SELFMON:
 			return "self-monitoring";
+        case ZBX_PROCESS_TYPE_HISTSYNCER_TRENDS:
+			return "trends syncer";
 	}
 
 	assert(0);

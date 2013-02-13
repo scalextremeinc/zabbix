@@ -54,6 +54,9 @@ extern unsigned char	daemon_type;
 extern int		CONFIG_HISTSYNCER_FREQUENCY;
 extern int		CONFIG_NODE_NOHISTORY;
 
+extern int		process_num;
+extern unsigned char	process_type;
+
 static int		ZBX_HISTORY_SIZE = 0;
 int			ZBX_SYNC_MAX = 1000;	/* must be less than ZBX_HISTORY_SIZE */
 static int		ZBX_ITEMIDS_SIZE = 0;
@@ -2128,25 +2131,32 @@ int	DCsync_history(int sync_type)
 
 		if (0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER))
 		{
-            sec = zbx_time();
-			DCmass_update_items(history, history_num);
-            sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "DCmass_update_items: " ZBX_FS_DBL " seconds", sec);
-            
-            sec = zbx_time();    
-			DCmass_add_history(history, history_num);
-            sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "DCmass_add_history: " ZBX_FS_DBL " seconds", sec);
-            
-            sec = zbx_time(); 
-			DCmass_update_triggers(history, history_num);
-            sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "DCmass_update_triggers: " ZBX_FS_DBL " seconds", sec);
-            
-            sec = zbx_time();
-			DCmass_update_trends(history, history_num);
-            sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "DCmass_update_trends: " ZBX_FS_DBL " seconds", sec);
+            if (ZBX_SYNC_PARTIAL_HISTORY == sync_type || ZBX_SYNC_FULL == sync_type) {
+                sec = zbx_time();
+                DCmass_update_items(history, history_num);
+                sec = zbx_time() - sec;
+                zabbix_log(LOG_LEVEL_INFORMATION, "%s #%d: sync %d, DCmass_update_items: " 
+                    ZBX_FS_DBL " seconds", get_process_type_string(process_type), process_num, syncs, sec);
+                
+                sec = zbx_time();    
+                DCmass_add_history(history, history_num);
+                sec = zbx_time() - sec;
+                zabbix_log(LOG_LEVEL_INFORMATION, "%s #%d: sync %d, DCmass_add_history: " 
+                    ZBX_FS_DBL " seconds", get_process_type_string(process_type), process_num, syncs, sec);
+                
+                sec = zbx_time(); 
+                DCmass_update_triggers(history, history_num);
+                sec = zbx_time() - sec;
+                zabbix_log(LOG_LEVEL_INFORMATION, "%s #%d: sync %d, DCmass_update_triggers: " 
+                    ZBX_FS_DBL " seconds", get_process_type_string(process_type), process_num, syncs, sec);
+            }
+            if (ZBX_SYNC_PARTIAL_TRENDS == sync_type || ZBX_SYNC_FULL == sync_type) {
+                sec = zbx_time();
+                DCmass_update_trends(history, history_num);
+                sec = zbx_time() - sec;
+                zabbix_log(LOG_LEVEL_INFORMATION, "%s #%d: sync %d, DCmass_update_trends: " 
+                    ZBX_FS_DBL " seconds", get_process_type_string(process_type), process_num, syncs, sec);
+            }
 		}
 		else
 		{

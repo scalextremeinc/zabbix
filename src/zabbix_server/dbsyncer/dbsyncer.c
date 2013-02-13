@@ -43,7 +43,7 @@ extern int		process_num;
  * Comments: never returns                                                    *
  *                                                                            *
  ******************************************************************************/
-void	main_dbsyncer_loop()
+void	main_dbsyncer_loop(int sync_type)
 {
 	int	sleeptime, last_sleeptime = -1, num;
 	double	sec;
@@ -62,7 +62,7 @@ void	main_dbsyncer_loop()
 		zabbix_log(LOG_LEVEL_DEBUG, "Syncing ...");
 
 		sec = zbx_time();
-		num = DCsync_history(ZBX_SYNC_PARTIAL);
+		num = DCsync_history(sync_type);
 		sec = zbx_time() - sec;
 
 		zabbix_log(LOG_LEVEL_DEBUG, "%s #%d spent " ZBX_FS_DBL " seconds while processing %d items",
