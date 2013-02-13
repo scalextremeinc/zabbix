@@ -1984,6 +1984,7 @@ int	DCsync_history(int sync_type)
 	int			total_num = 0;
 	int			skipped_clock, max_delay;
 	time_t			now = 0;
+    double	sec;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s() history_first:%d history_num:%d",
 			__function_name, cache->history_first, cache->history_num);
@@ -2127,10 +2128,25 @@ int	DCsync_history(int sync_type)
 
 		if (0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER))
 		{
+            sec = zbx_time();
 			DCmass_update_items(history, history_num);
+            sec = zbx_time() - sec;
+            zabbix_log(LOG_LEVEL_INFORMATION, "DCmass_update_items: " ZBX_FS_DBL " seconds", sec);
+            
+            sec = zbx_time();    
 			DCmass_add_history(history, history_num);
+            sec = zbx_time() - sec;
+            zabbix_log(LOG_LEVEL_INFORMATION, "DCmass_add_history: " ZBX_FS_DBL " seconds", sec);
+            
+            sec = zbx_time(); 
 			DCmass_update_triggers(history, history_num);
+            sec = zbx_time() - sec;
+            zabbix_log(LOG_LEVEL_INFORMATION, "DCmass_update_triggers: " ZBX_FS_DBL " seconds", sec);
+            
+            sec = zbx_time();
 			DCmass_update_trends(history, history_num);
+            sec = zbx_time() - sec;
+            zabbix_log(LOG_LEVEL_INFORMATION, "DCmass_update_trends: " ZBX_FS_DBL " seconds", sec);
 		}
 		else
 		{
