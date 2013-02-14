@@ -20,6 +20,6 @@
 #ifndef ZABBIX_DBSYNCER_H
 #define ZABBIX_DBSYNCER_H
 
-void	main_dbsyncer_loop(int sync_type);
+void	main_dbsyncer_loop();
 
 #endif
