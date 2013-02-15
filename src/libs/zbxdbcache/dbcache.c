@@ -657,7 +657,7 @@ static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *tre
 
 	hour = history->clock - history->clock % SEC_PER_HOUR;
     
-    zabbix_log(LOG_LEVEL_INFORMATION, "DCadd_trend: hour: %d", hour);
+    //zabbix_log(LOG_LEVEL_INFORMATION, "DCadd_trend: hour: %d", hour);
 
 	trend = DCget_trend(history->itemid);
 
