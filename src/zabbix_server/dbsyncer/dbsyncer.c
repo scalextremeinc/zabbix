@@ -28,6 +28,7 @@
 #include "dbsyncer.h"
 
 extern int		CONFIG_HISTSYNCER_FREQUENCY;
+extern int CONFIG_HISTSYNCER_TRENDS_FREQUENCY;
 extern int		ZBX_SYNC_MAX;
 extern unsigned char	process_type;
 extern int		process_num;
@@ -109,5 +110,33 @@ void	main_dbsyncer_loop()
 		last_sleeptime = sleeptime;
 
 		zbx_sleep_loop(sleeptime);
+	}
+}
+
+void	main_dbsyncer_trends_loop()
+{
+	double	sec;
+
+	zabbix_log(LOG_LEVEL_DEBUG, "In main_dbsyncer_trends_loop() process_num:%d", process_num);
+
+	zbx_setproctitle("%s [connecting to the database]", get_process_type_string(process_type));
+
+	DBconnect(ZBX_DB_CONNECT_NORMAL);
+
+	for (;;)
+	{
+		zbx_setproctitle("%s [syncing trends]", get_process_type_string(process_type));
+
+		zabbix_log(LOG_LEVEL_DEBUG, "Syncing ...");
+
+		sec = zbx_time();
+        DCmass_flush_trends();
+		sec = zbx_time() - sec;
+
+		zabbix_log(LOG_LEVEL_DEBUG, "%s #%d spent " ZBX_FS_DBL " seconds writing trends to db",
+				get_process_type_string(process_type), process_num, sec);
+
+
+		zbx_sleep_loop(CONFIG_HISTSYNCER_TRENDS_FREQUENCY);
 	}
 }

@@ -21,5 +21,6 @@
 #define ZABBIX_DBSYNCER_H
 
 void	main_dbsyncer_loop();
+void	main_dbsyncer_trends_loop();
 
 #endif

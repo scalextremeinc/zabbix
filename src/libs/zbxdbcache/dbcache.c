@@ -41,10 +41,13 @@ static zbx_mem_info_t	*trend_mem = NULL;
 #define	UNLOCK_TRENDS	zbx_mutex_unlock(&trends_lock)
 #define	LOCK_CACHE_IDS		zbx_mutex_lock(&cache_ids_lock)
 #define	UNLOCK_CACHE_IDS	zbx_mutex_unlock(&cache_ids_lock)
+#define	LOCK_TRENDS_DB	zbx_mutex_lock(&trends_db_lock)
+#define	UNLOCK_TRENDS_DB	zbx_mutex_unlock(&trends_db_lock)
 
 static ZBX_MUTEX	cache_lock;
 static ZBX_MUTEX	trends_lock;
 static ZBX_MUTEX	cache_ids_lock;
+static ZBX_MUTEX	trends_db_lock;
 
 static char		*sql = NULL;
 static size_t		sql_alloc = 64 * ZBX_KIBIBYTE;
@@ -60,6 +63,8 @@ extern unsigned char	process_type;
 static int		ZBX_HISTORY_SIZE = 0;
 int			ZBX_SYNC_MAX = 1000;	/* must be less than ZBX_HISTORY_SIZE */
 static int		ZBX_ITEMIDS_SIZE = 0;
+
+static int		ZBX_TRENDS_DB_SIZE = 0;
 
 #define ZBX_IDS_SIZE	10
 
@@ -139,6 +144,8 @@ typedef struct
 	int		trends_num;
 	int		itemids_alloc, itemids_num;
 	zbx_timespec_t	last_ts;
+    ZBX_DC_TREND *trends_db;
+    int trends_num_db;
 }
 ZBX_DC_CACHE;
 
@@ -643,17 +650,35 @@ static void	DCflush_trend(ZBX_DC_TREND *trend, ZBX_DC_TREND **trends, int *trend
  * Author: Alexander Vladishev                                                *
  *                                                                            *
  ******************************************************************************/
-static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *trends_alloc, int *trends_num)
+static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *trends_num)
 {
 	ZBX_DC_TREND	*trend = NULL;
-	int		hour;
+	int		hour, unlock_trends_db = 0;
 
 	hour = history->clock - history->clock % SEC_PER_HOUR;
+    
+    zabbix_log(LOG_LEVEL_INFORMATION, "DCadd_trend: hour: %d", hour);
 
 	trend = DCget_trend(history->itemid);
 
-	if (trend->num > 0 && (trend->clock != hour || trend->value_type != history->value_type))
-		DCflush_trend(trend, trends, trends_alloc, trends_num);
+	if (trend->num > 0 && (trend->clock != hour || trend->value_type != history->value_type)) {
+        LOCK_TRENDS_DB;
+        unlock_trends_db = 1;
+        zabbix_log(LOG_LEVEL_INFORMATION, "DCflush_trend: trends_num: %d", *trends_num);
+        // trends db cache is full so wait for free space
+        while(trends_num == ZBX_TRENDS_DB_SIZE) {
+            UNLOCK_TRENDS_DB;
+            zbx_sleep(1);
+            LOCK_TRENDS_DB;
+        }
+        memcpy(&(*trends)[*trends_num], trend, sizeof(ZBX_DC_TREND));
+        (*trends_num)++;
+        trend->clock = 0;
+        trend->num = 0;
+        memset(&trend->value_min, 0, sizeof(history_value_t));
+        memset(&trend->value_avg, 0, sizeof(history_value_t));
+        memset(&trend->value_max, 0, sizeof(history_value_t));
+    }
 
 	trend->value_type = history->value_type;
 	trend->clock = hour;
@@ -678,6 +703,10 @@ static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *tre
 			break;
 	}
 	trend->num++;
+    
+    if (1 == unlock_trends_db) {
+        UNLOCK_TRENDS_DB;
+    }
 }
 
 /******************************************************************************
@@ -693,8 +722,7 @@ static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *tre
 static void	DCmass_update_trends(ZBX_DC_HISTORY *history, int history_num)
 {
 	const char	*__function_name = "DCmass_update_trends";
-	ZBX_DC_TREND	*trends = NULL;
-	int		trends_alloc = 0, trends_num = 0, i;
+	int		i;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
 
@@ -712,18 +740,47 @@ static void	DCmass_update_trends(ZBX_DC_HISTORY *history, int history_num)
 		if (0 != history[i].value_null)
 			continue;
 
-		DCadd_trend(&history[i], &trends, &trends_alloc, &trends_num);
+		DCadd_trend(&history[i], &cache->trends_db, &cache->trends_num_db);
 	}
 
 	UNLOCK_TRENDS;
 
-	while (0 < trends_num)
-		DCflush_trends(trends, &trends_num, 1);
-
-	zbx_free(trends);
-
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
+
+void DCmass_flush_trends()
+{
+    ZBX_DC_TREND *trends = NULL;
+    double sec;
+    int trends_num = 0;
+
+    sec = zbx_time();
+    
+    LOCK_TRENDS_DB;
+    
+    zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: DCmass_flush_trends: trends_num_db: %d",
+        process_type, process_num, cache->trends_num_db);
+    if (0 < cache->trends_num_db) {
+        trends_num = cache->trends_num_db;
+        trends = zbx_malloc(trends, trends_num * sizeof(ZBX_DC_TREND));
+        while (0 < cache->trends_num_db) {
+            trends[cache->trends_num_db - 1] = cache->trends_db[cache->trends_num_db - 1];
+            cache->trends_num_db--;
+        }
+    }
+        
+    UNLOCK_TRENDS_DB;    
+    
+    while (0 < trends_num)
+		DCflush_trends(trends, &trends_num, 1);
+    
+    zbx_free(trends);
+    
+    sec = zbx_time() - sec;
+    zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: DCmass_flush_trends: " 
+        ZBX_FS_DBL " seconds", process_type, process_num, sec);
+}
+
 
 /******************************************************************************
  *                                                                            *
@@ -2801,6 +2858,7 @@ void	init_database_cache()
 	}
 
 	ZBX_HISTORY_SIZE = CONFIG_HISTORY_CACHE_SIZE / sizeof(ZBX_DC_HISTORY);
+    ZBX_TRENDS_DB_SIZE = CONFIG_TRENDS_CACHE_SIZE / sizeof(ZBX_DC_TREND);
 	if (ZBX_SYNC_MAX > ZBX_HISTORY_SIZE)
 		ZBX_SYNC_MAX = ZBX_HISTORY_SIZE;
 	ZBX_ITEMIDS_SIZE = CONFIG_HISTSYNCER_FORKS * ZBX_SYNC_MAX;
@@ -2809,6 +2867,7 @@ void	init_database_cache()
 
 	sz = sizeof(ZBX_DC_CACHE);
 	sz += ZBX_HISTORY_SIZE * sizeof(ZBX_DC_HISTORY);
+    sz += ZBX_TRENDS_DB_SIZE * sizeof(ZBX_DC_TREND);
 	sz += ZBX_ITEMIDS_SIZE * sizeof(zbx_uint64_t);
 	sz += sizeof(ZBX_DC_IDS);
 	sz = zbx_mem_required_size(sz, 4, "history cache", "HistoryCacheSize");
@@ -2823,6 +2882,8 @@ void	init_database_cache()
 	cache->itemids = (zbx_uint64_t *)__history_mem_malloc_func(NULL, ZBX_ITEMIDS_SIZE * sizeof(zbx_uint64_t));
 	cache->itemids_alloc = ZBX_ITEMIDS_SIZE;
 	cache->itemids_num = 0;
+    cache->trends_db = (ZBX_DC_TREND *)__history_mem_malloc_func(NULL, ZBX_TRENDS_DB_SIZE * sizeof(ZBX_DC_TREND));
+    cache->trends_num_db = 0;
 	memset(&cache->stats, 0, sizeof(ZBX_DC_STATS));
 
 	ids = (ZBX_DC_IDS *)__history_mem_malloc_func(NULL, sizeof(ZBX_DC_IDS));
