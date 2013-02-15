@@ -664,10 +664,11 @@ static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *tre
 	if (trend->num > 0 && (trend->clock != hour || trend->value_type != history->value_type)) {
         LOCK_TRENDS_DB;
         unlock_trends_db = 1;
-        zabbix_log(LOG_LEVEL_INFORMATION, "DCflush_trend: trends_num: %d", *trends_num);
-        // trends db cache is full so wait for free space
+        zabbix_log(LOG_LEVEL_INFORMATION, "DCadd_trend: trends_num: %d", *trends_num);
+        // if trends db cache is full, wait for free space
         while(trends_num == ZBX_TRENDS_DB_SIZE) {
             UNLOCK_TRENDS_DB;
+            zabbix_log(LOG_LEVEL_INFORMATION, "DCadd_trend: trends db cache full");
             zbx_sleep(1);
             LOCK_TRENDS_DB;
         }
