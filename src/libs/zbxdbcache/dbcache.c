@@ -670,7 +670,7 @@ static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *tre
         // if trends db cache is full, wait for free space
         while(*trends_num == ZBX_TRENDS_DB_SIZE) {
             UNLOCK_TRENDS_DB;
-            zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: DCadd_trend: trends db cache full",
+            zabbix_log(LOG_LEVEL_WARNING, "%d/%d: DCadd_trend: trends db cache full",
                 process_type, process_num);
             zbx_sleep(1);
             LOCK_TRENDS_DB;
