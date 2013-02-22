@@ -777,8 +777,12 @@ void DCmass_flush_trends()
         
     UNLOCK_TRENDS_DB;
     
+    DBbegin();
+    
     while (0 < trends_num)
 		DCflush_trends(trends, &trends_num, 1);
+    
+    DBcommit();
     
     zbx_free(trends);
     
