@@ -201,7 +201,7 @@ const char	*get_process_type_string(unsigned char process_type)
 		case ZBX_PROCESS_TYPE_SELFMON:
 			return "self-monitoring";
         case ZBX_PROCESS_TYPE_HISTSYNCER_TRENDS:
-			return "self-monitoring";
+			return "trends syncer";
 	}
 
 	assert(0);
