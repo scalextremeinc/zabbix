@@ -653,7 +653,7 @@ static void	DCflush_trend(ZBX_DC_TREND *trend, ZBX_DC_TREND **trends, int *trend
 static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *trends_num)
 {
 	ZBX_DC_TREND	*trend = NULL;
-	int		hour, unlock_trends_db = 0;
+	int		hour, unlock = 0;
 
 	hour = history->clock - history->clock % SEC_PER_HOUR;
     
@@ -663,7 +663,7 @@ static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *tre
 
 	if (trend->num > 0 && (trend->clock != hour || trend->value_type != history->value_type)) {
         LOCK_TRENDS_DB;
-        unlock_trends_db = 1;
+        unlock = 1;
         zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: DCadd_trend: trends_num: %d, size: %d/%d",
             process_type, process_num, *trends_num,
             (*trends_num) * sizeof(ZBX_DC_TREND), ZBX_TRENDS_DB_SIZE * sizeof(ZBX_DC_TREND));
@@ -710,7 +710,7 @@ static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *tre
 	}
 	trend->num++;
     
-    if (1 == unlock_trends_db) {
+    if (1 == unlock) {
         UNLOCK_TRENDS_DB;
     }
 }
@@ -2810,6 +2810,12 @@ static void	init_trend_cache()
 		zbx_error("cannot create mutex for trend cache");
 		exit(FAIL);
 	}
+    
+    if (ZBX_MUTEX_ERROR == zbx_mutex_create_force(&trends_db_lock, ZBX_MUTEX_TRENDS_DB))
+	{
+		zbx_error("cannot create mutex for trends db write cache");
+		exit(FAIL);
+	}
 
 	sz = zbx_mem_required_size(CONFIG_TRENDS_CACHE_SIZE, 1, "trend cache", "TrendCacheSize");
 	zbx_mem_create(&trend_mem, trend_shm_key, ZBX_NO_MUTEX, sz, "trend cache", "TrendCacheSize");
@@ -2967,8 +2973,10 @@ void	free_database_cache()
 
 	zbx_mutex_destroy(&cache_lock);
 	zbx_mutex_destroy(&cache_ids_lock);
-	if (0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER))
+	if (0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER)) {
 		zbx_mutex_destroy(&trends_lock);
+        zbx_mutex_destroy(&trends_db_lock);
+    }
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
