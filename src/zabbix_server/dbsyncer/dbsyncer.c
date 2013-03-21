@@ -27,6 +27,16 @@
 #include "dbcache.h"
 #include "dbsyncer.h"
 
+#ifdef HAVE_QUEUE
+#include "queue.h"
+#include <zmq.h>
+
+extern char* CONFIG_ZMQ_QUEUE_ADDRESS;
+extern char* CONFIG_ZMQ_ERRQUEUE_ADDRESS;
+extern char* CONFIG_ZMQ_QUEUE_RECOVERY_DIR;
+extern int CONFIG_ZMQ_DAOC;
+#endif
+
 extern int		CONFIG_HISTSYNCER_FREQUENCY;
 extern int CONFIG_HISTSYNCER_TRENDS_FREQUENCY;
 extern int		ZBX_SYNC_MAX;
@@ -120,6 +130,14 @@ void	main_dbsyncer_trends_loop()
 	zabbix_log(LOG_LEVEL_DEBUG, "In main_dbsyncer_trends_loop() process_num:%d", process_num);
 
 	zbx_setproctitle("%s [connecting to the database]", get_process_type_string(process_type));
+    
+#ifdef HAVE_QUEUE
+    // connect to zmq queue
+    struct queue_ctx qctx;
+    queue_ctx_init(&qctx, CONFIG_ZMQ_QUEUE_RECOVERY_DIR, CONFIG_ZMQ_DAOC);
+    queue_sock_connect_msg(&qctx, CONFIG_ZMQ_QUEUE_ADDRESS);
+    queue_sock_connect_err(&qctx, CONFIG_ZMQ_ERRQUEUE_ADDRESS);
+#endif
 
 	DBconnect(ZBX_DB_CONNECT_NORMAL);
 
@@ -130,8 +148,14 @@ void	main_dbsyncer_trends_loop()
 		zabbix_log(LOG_LEVEL_DEBUG, "Syncing ...");
 
 		sec = zbx_time();
+        
+#ifdef HAVE_QUEUE
+        DCmass_flush_trends(&qctx);
+#else
         DCmass_flush_trends();
-		sec = zbx_time() - sec;
+#endif
+
+        sec = zbx_time() - sec;
 
 		zabbix_log(LOG_LEVEL_DEBUG, "%s #%d spent " ZBX_FS_DBL " seconds writing trends to db",
 				get_process_type_string(process_type), process_num, sec);
@@ -139,4 +163,10 @@ void	main_dbsyncer_trends_loop()
 
 		zbx_sleep_loop(CONFIG_HISTSYNCER_TRENDS_FREQUENCY);
 	}
+
+#ifdef HAVE_QUEUE
+    // clean up queue stuff
+    queue_ctx_destroy(&qctx);
+#endif
+
 }

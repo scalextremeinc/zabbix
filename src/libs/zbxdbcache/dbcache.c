@@ -754,8 +754,84 @@ static void	DCmass_update_trends(ZBX_DC_HISTORY *history, int history_num)
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
-void DCmass_flush_trends()
-{
+#ifdef HAVE_QUEUE
+static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_num) {
+    const size_t BUF_SIZE = 32;
+    char buf[BUF_SIZE];
+    ZBX_DC_TREND *trend = NULL;
+    size_t sql_offset = 0;
+    DB_RESULT result;
+	DB_ROW item_row;
+    int i;
+     
+    zbx_json_init(j, ZBX_JSON_STAT_BUF_LEN);
+    //zbx_json_addstring(j, ZBX_PROTO_TAG_REQUEST, ZBX_PROTO_VALUE_AGENT_DATA, ZBX_JSON_TYPE_STRING);
+    
+    // this is information for worker where to store this data
+    zbx_json_addstring(j, "target", "trends", ZBX_JSON_TYPE_STRING);
+    
+    //if (trends_num > 0) {
+    //    zbx_snprintf(buf, BUF_SIZE, "%d", trends[0].clock);
+    //    zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
+    //} else {
+    //    zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, "0", ZBX_JSON_TYPE_INT);
+    //}
+    
+    //zbx_json_addstring(j, ZBX_PROTO_TAG_NS, "0", ZBX_JSON_TYPE_INT);
+        
+    zbx_json_addarray(j, ZBX_PROTO_TAG_DATA);
+    
+	for (i = 0; i < trends_num; i++) {
+		trend = &trends[i];
+        
+        zbx_json_addobject(j, NULL);
+        
+        switch (trend->value_type)
+        {
+            case ITEM_VALUE_TYPE_FLOAT:
+                zbx_snprintf(buf, BUF_SIZE, "%f", trend->value_avg.dbl);
+                break;
+            case ITEM_VALUE_TYPE_UINT64:
+                zbx_snprintf(buf, BUF_SIZE, ZBX_FS_UI64, trend->value_avg.ui64);
+                break;
+        }
+        zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
+        
+        sql_offset = 0;
+        zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
+            "SELECT i.key_,h.host "
+            "FROM items as i LEFT JOIN (hosts as h) ON (i.hostid=h.hostid) "
+            "WHERE i.itemid=%d LIMIT 1", trend->itemid);
+        result = DBselect("%s", sql);
+        item_row = DBfetch(result);
+        if (item_row == NULL) {
+            zabbix_log(LOG_LEVEL_ERR, "Unable to get item by id: %d", trend->itemid);
+            continue;
+        }
+        
+        zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, item_row[0], ZBX_JSON_TYPE_STRING);
+        zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item_row[1], ZBX_JSON_TYPE_STRING);
+        
+        DBfree_result(result);
+        
+        zbx_snprintf(buf, BUF_SIZE, "%d", trend->clock);
+        zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
+        
+        //zbx_json_addstring(j, ZBX_PROTO_TAG_NS, "0", ZBX_JSON_TYPE_INT);
+        
+        zbx_json_close(j);
+    }
+    
+}
+#endif
+
+#ifdef HAVE_QUEUE
+void DCmass_flush_trends(struct queue_ctx* qctx) {
+    struct zbx_json j;
+    struct zbx_json_parse jp;
+#else
+void DCmass_flush_trends() {
+#endif
     ZBX_DC_TREND *trends = NULL;
     double sec;
     int trends_num = 0;
@@ -777,13 +853,21 @@ void DCmass_flush_trends()
         
     UNLOCK_TRENDS_DB;
     
+#ifdef HAVE_QUEUE
+    if (trends_num > 0) {
+        trends_to_json(&j, trends, trends_num);
+        zbx_json_open(j.buffer, &jp);
+        queue_msg(qctx, &jp, NULL);
+    }
+#endif
+    
     DBbegin();
     
     while (0 < trends_num)
 		DCflush_trends(trends, &trends_num, 1);
     
     DBcommit();
-    
+        
     zbx_free(trends);
     
     sec = zbx_time() - sec;
