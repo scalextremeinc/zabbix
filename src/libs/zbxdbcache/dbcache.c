@@ -765,37 +765,14 @@ static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_
     int i;
      
     zbx_json_init(j, ZBX_JSON_STAT_BUF_LEN);
-    //zbx_json_addstring(j, ZBX_PROTO_TAG_REQUEST, ZBX_PROTO_VALUE_AGENT_DATA, ZBX_JSON_TYPE_STRING);
     
     // this is information for worker where to store this data
     zbx_json_addstring(j, "target", "trends", ZBX_JSON_TYPE_STRING);
-    
-    //if (trends_num > 0) {
-    //    zbx_snprintf(buf, BUF_SIZE, "%d", trends[0].clock);
-    //    zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
-    //} else {
-    //    zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, "0", ZBX_JSON_TYPE_INT);
-    //}
-    
-    //zbx_json_addstring(j, ZBX_PROTO_TAG_NS, "0", ZBX_JSON_TYPE_INT);
         
     zbx_json_addarray(j, ZBX_PROTO_TAG_DATA);
     
 	for (i = 0; i < trends_num; i++) {
 		trend = &trends[i];
-        
-        zbx_json_addobject(j, NULL);
-        
-        switch (trend->value_type)
-        {
-            case ITEM_VALUE_TYPE_FLOAT:
-                zbx_snprintf(buf, BUF_SIZE, "%f", trend->value_avg.dbl);
-                break;
-            case ITEM_VALUE_TYPE_UINT64:
-                zbx_snprintf(buf, BUF_SIZE, ZBX_FS_UI64, trend->value_avg.ui64);
-                break;
-        }
-        zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
         
         sql_offset = 0;
         zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
@@ -809,6 +786,23 @@ static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_
             continue;
         }
         
+        switch (trend->value_type) {
+            case ITEM_VALUE_TYPE_FLOAT:
+                zbx_snprintf(buf, BUF_SIZE, "%f", trend->value_avg.dbl);
+                break;
+            case ITEM_VALUE_TYPE_UINT64:
+                zbx_snprintf(buf, BUF_SIZE, ZBX_FS_UI64, trend->value_avg.ui64);
+                break;
+            default:
+                zabbix_log(LOG_LEVEL_ERR, "Unknown trend value type: %d", trend->value_type);
+                continue;
+        }
+        
+        zbx_json_addobject(j, NULL);
+        
+        zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
+        
+        
         zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, item_row[0], ZBX_JSON_TYPE_STRING);
         zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item_row[1], ZBX_JSON_TYPE_STRING);
         
@@ -816,8 +810,6 @@ static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_
         
         zbx_snprintf(buf, BUF_SIZE, "%d", trend->clock);
         zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
-        
-        //zbx_json_addstring(j, ZBX_PROTO_TAG_NS, "0", ZBX_JSON_TYPE_INT);
         
         zbx_json_close(j);
     }
