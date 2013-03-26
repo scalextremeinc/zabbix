@@ -114,6 +114,8 @@ typedef struct
 	int		num;
 	int		disable_from;
 	unsigned char	value_type;
+    char key[256]; // key in db is varchar(255)
+    char host[65]; // host in db is varchar(64)
 }
 ZBX_DC_TREND;
 
@@ -684,6 +686,8 @@ static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *tre
         memset(&trend->value_min, 0, sizeof(history_value_t));
         memset(&trend->value_avg, 0, sizeof(history_value_t));
         memset(&trend->value_max, 0, sizeof(history_value_t));
+        trend->key[0] = '\0';
+        trend->host[0] = '\0';
     }
 
 	trend->value_type = history->value_type;
@@ -774,16 +778,23 @@ static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_
 	for (i = 0; i < trends_num; i++) {
 		trend = &trends[i];
         
-        sql_offset = 0;
-        zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
-            "SELECT i.key_,h.host "
-            "FROM items as i LEFT JOIN (hosts as h) ON (i.hostid=h.hostid) "
-            "WHERE i.itemid=%d LIMIT 1", trend->itemid);
-        result = DBselect("%s", sql);
-        item_row = DBfetch(result);
-        if (item_row == NULL) {
-            zabbix_log(LOG_LEVEL_ERR, "Unable to get item by id: %d", trend->itemid);
-            continue;
+        if ('\0' == trend->key[0] || '\0' == trend->host[0]) {
+            sql_offset = 0;
+            zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
+                "SELECT i.key_,h.host "
+                "FROM items as i LEFT JOIN (hosts as h) ON (i.hostid=h.hostid) "
+                "WHERE i.itemid=%d LIMIT 1", trend->itemid);
+            result = DBselect("%s", sql);
+            item_row = DBfetch(result);
+            if (item_row == NULL) {
+                zabbix_log(LOG_LEVEL_ERR, "Unable to get item by id: %d", trend->itemid);
+                continue;
+            }
+            
+            memcpy(trend->key, item_row[0], strlen(item_row[0]) + 1);
+            memcpy(trend->host, item_row[1], strlen(item_row[1]) + 1);
+            
+            DBfree_result(result);
         }
         
         switch (trend->value_type) {
@@ -803,10 +814,8 @@ static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_
         zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
         
         
-        zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, item_row[0], ZBX_JSON_TYPE_STRING);
-        zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item_row[1], ZBX_JSON_TYPE_STRING);
-        
-        DBfree_result(result);
+        zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, trend->key, ZBX_JSON_TYPE_STRING);
+        zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, trend->host, ZBX_JSON_TYPE_STRING);
         
         zbx_snprintf(buf, BUF_SIZE, "%d", trend->clock);
         zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
@@ -825,7 +834,7 @@ void DCmass_flush_trends(struct queue_ctx* qctx) {
 void DCmass_flush_trends() {
 #endif
     ZBX_DC_TREND *trends = NULL;
-    double sec;
+    double sec, sec2;
     int trends_num = 0;
 
     sec = zbx_time();
@@ -847,9 +856,13 @@ void DCmass_flush_trends() {
     
 #ifdef HAVE_QUEUE
     if (trends_num > 0) {
+        sec2 = zbx_time();
         trends_to_json(&j, trends, trends_num);
         zbx_json_open(j.buffer, &jp);
         queue_msg(qctx, &jp, NULL);
+        sec2 = zbx_time() - sec2;
+        zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: queue send: " 
+            ZBX_FS_DBL " seconds", process_type, process_num, sec2);
     }
 #endif
     
