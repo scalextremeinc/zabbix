@@ -335,13 +335,14 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
 				" and h.status=%d"
 				" and i.type=%d"
 				" and i.flags<>%d"
+                " and i.collectorid is null"
 				" and h.hostid=" ZBX_FS_UI64
 				" and h.proxy_hostid is null",
 			HOST_STATUS_MONITORED,
 			ITEM_TYPE_ZABBIX_ACTIVE,
 			ZBX_FLAG_DISCOVERY_CHILD,
 			hostid);
-
+    
 	if (0 != *(int *)DCconfig_get_config_data(&refresh_unsupported, CONFIG_REFRESH_UNSUPPORTED))
 	{
 		zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
@@ -351,6 +352,9 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
 	}
 	else
 		zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset, " and i.status=%d", ITEM_STATUS_ACTIVE);
+    
+    
+    zabbix_log(LOG_LEVEL_INFORMATION, "SEND ACTIVE CHECKS: %s", sql);
 
 	zbx_free(name_esc);
 
@@ -432,9 +436,94 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
 
 		zbx_free(key);
 	}
+    
+    DBfree_result(result);
+    
+    // add collector checks
+    
+    sql_offset = 0;
+    zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
+			"select i.key_,i.delay,i.lastlogsize,i.mtime,i.collectorid,c.path,c.parameters"
+			" from items i,hosts h,collectors c"
+			" where i.hostid=h.hostid and i.collectorid=c.id"
+				" and h.status=%d"
+				" and i.type=%d"
+				" and i.flags<>%d"
+				" and h.hostid=" ZBX_FS_UI64
+				" and h.proxy_hostid is null"
+                " order by i.collectorid",
+			HOST_STATUS_MONITORED,
+			ITEM_TYPE_ZABBIX_ACTIVE,
+			ZBX_FLAG_DISCOVERY_CHILD,
+			hostid);
+    
+    if (0 != *(int *)DCconfig_get_config_data(&refresh_unsupported, CONFIG_REFRESH_UNSUPPORTED))
+	{
+		zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
+				" and (i.status=%d or (i.status=%d and i.lastclock+%d<=%d))",
+				ITEM_STATUS_ACTIVE, ITEM_STATUS_NOTSUPPORTED,
+				refresh_unsupported, time(NULL));
+	}
+	else
+		zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset, " and i.status=%d", ITEM_STATUS_ACTIVE);
+    
+    zabbix_log(LOG_LEVEL_INFORMATION, "SEND ACTIVE CHECKS COLLECTOR: %s", sql);
+    
+    result = DBselect("%s", sql);
+    unsigned long prev_id = 0, current_id;
+    char close_item_json = 0;
+	while (NULL != (row = DBfetch(result)))
+	{
+        if (FAIL == DCconfig_get_item_by_key(&dc_item, (zbx_uint64_t)0, host, row[0]))
+		{
+			zabbix_log(LOG_LEVEL_DEBUG, "%s() Item '%s' was not found in the server cache. "
+                "Not sending now.", __function_name, row[0]);
+			continue;
+		}
+		zabbix_log(LOG_LEVEL_DEBUG, "%s() Item '%s' was successfully found in the server cache. "
+            "Sending.", __function_name, row[0]);
+		ZBX_STRDUP(key, row[0]);
+		substitute_key_macros(&key, &dc_item.host, NULL, MACRO_TYPE_ITEM_KEY, NULL, 0);
+		DCconfig_clean_items(&dc_item, NULL, 1);
+        
+        current_id = atol(row[4]);
+        if (prev_id != current_id) {
+            if (close_item_json) {
+                // close last item metrics array
+                zbx_json_close(&json);
+                // close item object
+                zbx_json_close(&json);
+            }
+            zbx_json_addobject(&json, NULL);
+            zbx_snprintf(params, MAX_STRING_LEN, "collector[%d]", current_id);
+            zbx_json_addstring(&json, ZBX_PROTO_TAG_KEY, params, ZBX_JSON_TYPE_STRING);
+            zbx_json_addstring(&json, ZBX_PROTO_TAG_DELAY, row[1], ZBX_JSON_TYPE_INT);
+            // The agent expects ALWAYS to have lastlogsize and mtime tags.
+            // Removing those would cause older agents to fail.
+            zbx_json_addstring(&json, ZBX_PROTO_TAG_LOGLASTSIZE, row[2], ZBX_JSON_TYPE_INT);
+            zbx_json_addstring(&json, ZBX_PROTO_TAG_MTIME, row[3], ZBX_JSON_TYPE_INT);
+            zbx_json_addobject(&json, "collector");
+            zbx_json_addstring(&json, "command", row[5], ZBX_JSON_TYPE_STRING);
+            zbx_json_addstring(&json, "parameters", row[6], ZBX_JSON_TYPE_STRING);
+            zbx_json_close(&json);
+            zbx_json_addarray(&json, "metrics");
+            zbx_json_addstring(&json, NULL, key, ZBX_JSON_TYPE_STRING);
+        } else {
+            zbx_json_addstring(&json, NULL, key, ZBX_JSON_TYPE_STRING);
+        }
+        
+        prev_id = current_id;
+        close_item_json = 1;
+    }
+    DBfree_result(result);
+    if (close_item_json) {
+        // close last item metrics array
+        zbx_json_close(&json);
+        // close item object
+        zbx_json_close(&json);
+    }
+    
 	zbx_json_close(&json);
-
-	DBfree_result(result);
 
 	if (0 != regexp_num)
 	{
