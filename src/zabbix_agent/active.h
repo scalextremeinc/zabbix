@@ -65,6 +65,10 @@ typedef struct
 /* must be long for fseek() */
 	int		mtime;
 	unsigned char	skip_old_data;	/* for processing [event]log metrics */
+/* scalex collector */
+	struct {
+		char **metrics, *command;
+	} collector;
 }
 ZBX_ACTIVE_METRIC;
 

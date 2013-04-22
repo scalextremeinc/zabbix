@@ -120,7 +120,7 @@ static int	get_min_nextcheck()
 	return min;
 }
 
-static void	add_check(const char *key, const char *key_orig, int refresh, zbx_uint64_t lastlogsize, int mtime)
+static void	add_check(const char *key, const char *key_orig, int refresh, zbx_uint64_t lastlogsize, int mtime, char **metrics, char *command)
 {
 	const char	*__function_name = "add_check";
 	int	i;
@@ -163,6 +163,10 @@ static void	add_check(const char *key, const char *key_orig, int refresh, zbx_ui
 	/* can skip existing log[] and eventlog[] data */
 	active_metrics[i].skip_old_data = active_metrics[i].lastlogsize ? 0 : 1;
 
+	/* scalex collector */
+	active_metrics[i].collector.metrics = metrics;
+	active_metrics[i].collector.command = command;
+
 	/* move to the last metric */
 	i++;
 
@@ -203,8 +207,9 @@ static int	parse_list_of_checks(char *str)
 	int			delay, mtime, expression_type, case_sensitive;
 	zbx_uint64_t		lastlogsize;
 	struct zbx_json_parse	jp;
-	struct zbx_json_parse	jp_data, jp_row;
-
+	struct zbx_json_parse	jp_data, jp_row, jp_collector, jp_params;
+	char	**metrics, *command;
+	
 	zabbix_log(LOG_LEVEL_DEBUG, "In parse_list_of_checks()");
 
 	disable_all_metrics();
@@ -273,8 +278,58 @@ static int	parse_list_of_checks(char *str)
 		{
 			mtime = atoi(tmp);
 		}
+		metrics = NULL;
+		command = NULL;
+		if (SUCCEED == zbx_json_brackets_by_name(&jp_row, "metrics", &jp_collector))
+		{
+			const char *q;
+			char *parameters;
+			size_t parameters_alloc;
+			int i, nmetrics;
 
-		add_check(name, key_orig, delay, lastlogsize, mtime);
+			nmetrics = zbx_json_count(&jp_collector);
+			metrics = zbx_malloc(metrics, (nmetrics+1)*sizeof(*metrics));
+			i = 0;
+			q = NULL;
+			while (NULL != (q = zbx_json_next_value(&jp_collector, q, tmp, sizeof(tmp), NULL)))
+				metrics[i++] = zbx_strdup(NULL, tmp);
+
+			metrics[i] = NULL;
+
+			// do it here
+			if (SUCCEED != zbx_json_brackets_by_name(&jp_row, "collector", &jp_collector))
+			{
+				zabbix_log(LOG_LEVEL_WARNING, "Unable to retrieve value of tag \"%s\"",
+						   "collector");
+				continue;
+			}
+
+			if (SUCCEED != zbx_json_value_by_name(&jp_collector, "command", tmp, sizeof(tmp)) || '\0' == *tmp)
+			{
+				zabbix_log(LOG_LEVEL_WARNING, "Unable to retrieve value of tag \"%s\"",
+						   "command");
+				continue;
+			}
+
+			command = zbx_strdup(NULL, tmp);
+
+			parameters = NULL;
+			parameters_alloc = 0;
+			if (SUCCEED == zbx_json_value_by_name_dyn(&jp_collector, "parameters", &parameters, &parameters_alloc) && parameters &&
+				SUCCEED == zbx_json_brackets_open(parameters, &jp_params))
+			{
+				size_t command_len, command_offset;
+				
+				command_offset = strlen(command);
+				command_len = command_offset + 1;
+				q = NULL;
+				while (NULL != (q = zbx_json_next_value(&jp_params, q, tmp, sizeof(tmp), NULL)))
+					zbx_snprintf_alloc(&command, &command_len, &command_offset, " %s",  tmp);
+				zbx_free(parameters);
+			}
+		}
+
+		add_check(name, key_orig, delay, lastlogsize, mtime, metrics, command);
 	}
 
 	clean_regexps_ex(regexps, &regexps_num);
@@ -1097,6 +1152,60 @@ static void	process_active_checks(char *server, unsigned short port)
 						&active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
 			}
 		}
+		/* scalex: special processing for collectors */
+		else if (0 == strncmp(active_metrics[i].key, "collector[", 10))
+		{
+			int j;
+			ret = FAIL;
+
+			do{ /* simple try realization */
+				char *p, *q, *metric, *metric_result;
+
+				zabbix_log(LOG_LEVEL_WARNING, "executing collector: %s\n", active_metrics[i].collector.command);
+				if (SYSINFO_RET_FAIL == EXECUTE_STR(active_metrics[i].key, active_metrics[i].collector.command, 0, &result))
+					break;
+				if (NULL == (pvalue = GET_TEXT_RESULT(&result)))
+					pvalue = GET_MSG_RESULT(&result);
+				if (NULL == pvalue)
+					break;
+
+				p = *pvalue;
+				for (p = *pvalue; p && *p; ) {
+					zbx_ltrim(p, "\n\r");
+					metric = p;
+					if (NULL == (q = strchr(p, ':')))
+						continue;
+					*q++ = '\0';
+					metric_result = q;
+					if (NULL != (p = strchr(q, '\n')))
+						*p++ = '\0';
+					zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> result=<%s>\n", metric, metric_result);
+					for (j = 0; active_metrics[i].collector.metrics[j]; j++)
+						if (0 == strcmp(active_metrics[i].collector.metrics[j], metric))
+							process_value(server, port, CONFIG_HOSTNAME, metric, metric_result,
+										  &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
+					if (NULL == active_metrics[i].collector.metrics[j])
+						zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> skipped\n", metric);
+				}
+				ret = SUCCEED;
+				break;
+			}
+			while (0); /* simple try realization */
+			if (FAIL == ret)
+			{
+				zabbix_log(LOG_LEVEL_WARNING, "failed to exec: %s\n", active_metrics[i].collector.command);
+				// active_metrics[i].status = ITEM_STATUS_NOTSUPPORTED;
+				for (j = 0; active_metrics[i].collector.metrics[j]; j++)
+				{
+					zabbix_log(LOG_LEVEL_WARNING, "Active check collector[%s] failed. Error.",
+							   active_metrics[i].collector.metrics[j]);
+					
+					process_value(server, port, CONFIG_HOSTNAME,
+								  active_metrics[i].collector.metrics[j], ZBX_ERROR,
+								  &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
+				}
+			}
+		}
 		else
 		{
 			process(active_metrics[i].key, 0, &result);
@@ -1145,7 +1254,14 @@ ZBX_THREAD_ENTRY(active_checks_thread, args)
 	zbx_free(args);
 
 	init_active_metrics();
-
+	
+#if 0
+	parse_list_of_checks(json_fgb);
+	process_active_checks(activechk_args.host, activechk_args.port);
+	ZBX_DO_EXIT();
+	zbx_thread_exit(0);
+#endif
+	
 	while (ZBX_IS_RUNNING())
 	{
 		if (time(NULL) >= nextsend)
