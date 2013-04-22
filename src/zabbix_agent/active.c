@@ -312,21 +312,18 @@ static int	parse_list_of_checks(char *str)
 			}
 
 			command = zbx_strdup(NULL, tmp);
-
-			parameters = NULL;
-			parameters_alloc = 0;
-			if (SUCCEED == zbx_json_value_by_name_dyn(&jp_collector, "parameters", &parameters, &parameters_alloc) && parameters &&
-				SUCCEED == zbx_json_brackets_open(parameters, &jp_params))
-			{
-				size_t command_len, command_offset;
-				
-				command_offset = strlen(command);
-				command_len = command_offset + 1;
+            
+            // append aprameters to command
+            if (SUCCEED == zbx_json_brackets_by_name(&jp_collector, "parameters", &jp_params))
+            {
+                size_t command_offset = strlen(command);
+				size_t command_len = command_offset + 1;
 				q = NULL;
-				while (NULL != (q = zbx_json_next_value(&jp_params, q, tmp, sizeof(tmp), NULL)))
-					zbx_snprintf_alloc(&command, &command_len, &command_offset, " %s",  tmp);
-				zbx_free(parameters);
-			}
+                while (NULL != (q = zbx_json_next_value(&jp_params, q, tmp, sizeof(tmp), NULL)))
+                    zbx_snprintf_alloc(&command, &command_len, &command_offset, " %s",  tmp);
+                
+            }
+
 		}
 
 		add_check(name, key_orig, delay, lastlogsize, mtime, metrics, command);

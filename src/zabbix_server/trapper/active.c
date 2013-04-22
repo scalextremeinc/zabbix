@@ -504,7 +504,7 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
             zbx_json_addstring(&json, ZBX_PROTO_TAG_MTIME, row[3], ZBX_JSON_TYPE_INT);
             zbx_json_addobject(&json, "collector");
             zbx_json_addstring(&json, "command", row[5], ZBX_JSON_TYPE_STRING);
-            zbx_json_addstring(&json, "parameters", row[6], ZBX_JSON_TYPE_STRING);
+            zbx_json_addjson(&json, "parameters", row[6]);
             zbx_json_close(&json);
             zbx_json_addarray(&json, "metrics");
             zbx_json_addstring(&json, NULL, key, ZBX_JSON_TYPE_STRING);
@@ -562,7 +562,7 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
 	}
 	zbx_free(regexp);
 
-	zabbix_log(LOG_LEVEL_DEBUG, "%s() sending [%s]", __function_name, json.buffer);
+	zabbix_log(LOG_LEVEL_INFORMATION, "%s() sending [%s]", __function_name, json.buffer);
 
 	alarm(CONFIG_TIMEOUT);
 	if (SUCCEED != zbx_tcp_send(sock, json.buffer))
