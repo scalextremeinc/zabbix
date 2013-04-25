@@ -1178,7 +1178,12 @@ static void	process_active_checks(char *server, unsigned short port)
 						*p++ = '\0';
 					zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> result=<%s>\n", metric, metric_result);
 					for (j = 0; active_metrics[i].collector.metrics[j]; j++)
-						if (0 == strcmp(active_metrics[i].collector.metrics[j], metric))
+                        /*
+                         sxcollector.foo.bar - item.key 
+                         foo.bar - script output
+                         So here we skip 12=strlen(sxcollector.)
+                        */
+                        if (0 == strcmp(active_metrics[i].collector.metrics[j]+12, metric))
 							process_value(server, port, CONFIG_HOSTNAME, metric, metric_result,
 										  &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
 					if (NULL == active_metrics[i].collector.metrics[j])
