@@ -1176,6 +1176,10 @@ static void	process_active_checks(char *server, unsigned short port)
 					metric_result = q;
 					if (NULL != (p = strchr(q, '\n')))
 						*p++ = '\0';
+                    zbx_ltrim(metric, "\t ");
+                    zbx_rtrim(metric, "\t ");
+                    zbx_ltrim(metric_result, "\t ");
+                    zbx_rtrim(metric_result, "\t ");
 					zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> result=<%s>\n", metric, metric_result);
 					for (j = 0; active_metrics[i].collector.metrics[j]; j++)
                         /*
