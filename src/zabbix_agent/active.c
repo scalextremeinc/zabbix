@@ -1188,7 +1188,7 @@ static void	process_active_checks(char *server, unsigned short port)
                          So here we skip 12=strlen(sxcollector.)
                         */
                         if (0 == strcmp(active_metrics[i].collector.metrics[j]+12, metric))
-							process_value(server, port, CONFIG_HOSTNAME, metric, metric_result,
+							process_value(server, port, CONFIG_HOSTNAME, active_metrics[i].collector.metrics[j], metric_result,
 										  &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
 					if (NULL == active_metrics[i].collector.metrics[j])
 						zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> skipped\n", metric);
