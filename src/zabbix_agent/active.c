@@ -1154,6 +1154,7 @@ static void	process_active_checks(char *server, unsigned short port)
 		{
 			int j;
 			ret = FAIL;
+            int match_offset = 0;
 
 			do{ /* simple try realization */
 				char *p, *q, *metric, *metric_result;
@@ -1183,11 +1184,20 @@ static void	process_active_checks(char *server, unsigned short port)
 					zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> result=<%s>\n", metric, metric_result);
 					for (j = 0; active_metrics[i].collector.metrics[j]; j++)
                         /*
-                         sxcollector.foo.bar - item.key 
-                         foo.bar - script output
-                         So here we skip 12=strlen(sxcollector.)
+                         If the key is starting with udcollector, we skip the 12 chars
+
+                         So say we have udcollector.foo.bar - item.key, 
+                         then in the script output we use foo.bar
+
+                         foo.bar:12
+
                         */
-                        if (0 == strcmp(active_metrics[i].collector.metrics[j]+12, metric))
+                        if (0 == strncmp(active_metrics[i].collector.metrics[j], "udcollector.", 12)) {
+                            match_offset = 12;
+                        } else {
+                            match_offset = 0;
+                        }
+                        if (0 == strcmp(active_metrics[i].collector.metrics[j]+match_offset, metric))
 							process_value(server, port, CONFIG_HOSTNAME, active_metrics[i].collector.metrics[j], metric_result,
 										  &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
 					if (NULL == active_metrics[i].collector.metrics[j])
