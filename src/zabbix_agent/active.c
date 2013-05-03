@@ -1183,6 +1183,7 @@ static void	process_active_checks(char *server, unsigned short port)
                     zbx_rtrim(metric_result, "\t ");
 					zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> result=<%s>\n", metric, metric_result);
 					for (j = 0; active_metrics[i].collector.metrics[j]; j++)
+                    {
                         /*
                          If the key is starting with udcollector, we skip the 12 chars
 
@@ -1200,6 +1201,7 @@ static void	process_active_checks(char *server, unsigned short port)
                         if (0 == strcmp(active_metrics[i].collector.metrics[j]+match_offset, metric))
 							process_value(server, port, CONFIG_HOSTNAME, active_metrics[i].collector.metrics[j], metric_result,
 										  &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
+                    }
 					if (NULL == active_metrics[i].collector.metrics[j])
 						zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> skipped\n", metric);
 				}
