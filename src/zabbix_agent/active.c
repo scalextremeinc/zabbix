@@ -51,11 +51,79 @@ static int			regexps_alloc = 0;
 static int			regexps_num = 0;
 #endif
 
+static char storage_dir[128];
+
+static void init_agent_cwd() { 
+    char agent_cwd[128];
+	char path_tmp[32];
+	char *filename_p = NULL;
+    char *default_cwd;
+#ifdef __APPLE__
+    uint32_t size = sizeof(agent_cwd);
+    if (_NSGetExecutablePath(agent_cwd, &size) == 0) {
+        filename_p = strrchr( agent_cwd, '/' );
+    } else {
+		zabbix_log(LOG_LEVEL_DEBUG, "Error: Can not get the file path of the monitord. Mac OSX");
+        goto agent_cwd_err;
+    }   
+#elif _WINDOWS
+    GetModuleFileNameA(NULL, agent_cwd, 128);
+    filename_p = strrchr( agent_cwd, '\\' );
+#else
+    zbx_snprintf( path_tmp, 32,"/proc/%d/exe", getpid() );
+    int bytes = readlink(path_tmp, agent_cwd, 128) ;
+    if(bytes >= 0)
+    {   
+        agent_cwd[bytes] = '\0';
+    }   
+    else
+    {   
+		zabbix_log(LOG_LEVEL_DEBUG, "Error: Can not get the file path of the monitord.");
+        goto agent_cwd_err;
+    }   
+    filename_p = strrchr( agent_cwd, '/' );
+#endif
+
+	if( filename_p != NULL ) {
+		memcpy( &filename_p[0], "\0", 1);
+    } else {
+		zabbix_log(LOG_LEVEL_DEBUG, "Error: Can not get the cwd");
+        goto agent_cwd_err;
+    }
+
+
+    zabbix_log(LOG_LEVEL_INFORMATION, "Agent CWD %s", agent_cwd);
+    goto agent_cwd_end;
+
+agent_cwd_err:
+//fallback
+#if _WINDOWS
+    default_cwd = "C:/Program Files (x86)/ScaleXtreme";
+#else
+    default_cwd = "/opt/scalextreme/mitos";
+#endif
+    zbx_strlcpy(agent_cwd, default_cwd, sizeof(agent_cwd));
+    zabbix_log(LOG_LEVEL_INFORMATION, "Agent CWD %s (using default)", agent_cwd);
+
+agent_cwd_end:
+    zbx_strlcpy(storage_dir, agent_cwd, sizeof(storage_dir));
+#if _WINDOWS
+    strscat(storage_dir, "\\storage\\");
+#else
+    strscat(storage_dir, "/storage/");
+#endif
+
+    zabbix_log(LOG_LEVEL_INFORMATION, "Agent storage dir %s", storage_dir);
+
+}
+
 static void	init_active_metrics()
 {
 	size_t	sz;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In init_active_metrics()");
+
+    init_agent_cwd();
 
 	active_metrics = zbx_malloc(active_metrics, sizeof(ZBX_ACTIVE_METRIC));
 	active_metrics->key = NULL;
@@ -72,6 +140,7 @@ static void	init_active_metrics()
 		buffer.lastsent = (int)time(NULL);
 	}
 }
+
 
 static void	disable_all_metrics()
 {
@@ -311,7 +380,13 @@ static int	parse_list_of_checks(char *str)
 				continue;
 			}
 
-			command = zbx_strdup(NULL, tmp);
+            if (0 == strncmp(tmp, "{STORAGE_DIR}", 13)) {
+                command=zbx_malloc(command, MAX_STRING_LEN);
+                zbx_strlcpy(command, storage_dir, MAX_STRING_LEN);
+                zbx_strlcat(command, tmp+13, MAX_STRING_LEN);
+            } else {
+			    command = zbx_strdup(NULL, tmp);
+            }
             
             // append aprameters to command
             if (SUCCEED == zbx_json_brackets_by_name(&jp_collector, "parameters", &jp_params))
