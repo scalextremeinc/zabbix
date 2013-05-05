@@ -450,8 +450,7 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
 				" and i.type=%d"
 				" and i.flags<>%d"
 				" and h.hostid=" ZBX_FS_UI64
-				" and h.proxy_hostid is null"
-                " order by i.collectorid",
+				" and h.proxy_hostid is null",
 			HOST_STATUS_MONITORED,
 			ITEM_TYPE_ZABBIX_ACTIVE,
 			ZBX_FLAG_DISCOVERY_CHILD,
@@ -466,6 +465,9 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
 	}
 	else
 		zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset, " and i.status=%d", ITEM_STATUS_ACTIVE);
+
+    
+    zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset, " order by i.collectorid");
     
     zabbix_log(LOG_LEVEL_INFORMATION, "SEND ACTIVE CHECKS COLLECTOR: %s", sql);
     
