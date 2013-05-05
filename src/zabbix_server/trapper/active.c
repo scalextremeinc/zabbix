@@ -443,7 +443,7 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
     
     sql_offset = 0;
     zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
-			"select i.key_,i.delay,i.lastlogsize,i.mtime,i.collectorid,c.path,c.parameters"
+			"select i.key_,i.delay,i.lastlogsize,i.mtime,i.collectorid,c.path,c.parameters,c.mtime"
 			" from items i,hosts h,collectors c"
 			" where i.hostid=h.hostid and i.collectorid=c.id"
 				" and h.status=%d"
@@ -472,7 +472,7 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
     zabbix_log(LOG_LEVEL_INFORMATION, "SEND ACTIVE CHECKS COLLECTOR: %s", sql);
     
     result = DBselect("%s", sql);
-    unsigned long prev_id = 0, current_id;
+    unsigned long prev_id = 0, current_id, collector_mtime;
     char close_item_json = 0;
 	while (NULL != (row = DBfetch(result)))
 	{
@@ -496,8 +496,9 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
                 // close item object
                 zbx_json_close(&json);
             }
+            collector_mtime = atol(row[7]);
             zbx_json_addobject(&json, NULL);
-            zbx_snprintf(params, MAX_STRING_LEN, "collector[%d]", current_id);
+            zbx_snprintf(params, MAX_STRING_LEN, "collector[%d-%d]", current_id, collector_mtime);
             zbx_json_addstring(&json, ZBX_PROTO_TAG_KEY, params, ZBX_JSON_TYPE_STRING);
             zbx_json_addstring(&json, ZBX_PROTO_TAG_DELAY, row[1], ZBX_JSON_TYPE_INT);
             // The agent expects ALWAYS to have lastlogsize and mtime tags.
