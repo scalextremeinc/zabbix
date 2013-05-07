@@ -1228,8 +1228,8 @@ static void	process_active_checks(char *server, unsigned short port)
 		else if (0 == strncmp(active_metrics[i].key, "collector[", 10))
 		{
 			int j;
-			ret = FAIL;
 			int match_offset;
+			ret = FAIL;
 
 			do{ /* simple try realization */
 				char *p, *q, *metric, *metric_result;
