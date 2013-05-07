@@ -1229,7 +1229,7 @@ static void	process_active_checks(char *server, unsigned short port)
 		{
 			int j;
 			ret = FAIL;
-            int match_offset = 0;
+			int match_offset;
 
 			do{ /* simple try realization */
 				char *p, *q, *metric, *metric_result;
@@ -1242,9 +1242,10 @@ static void	process_active_checks(char *server, unsigned short port)
 				if (NULL == pvalue)
 					break;
 
-				p = *pvalue;
 				for (p = *pvalue; p && *p; ) {
 					zbx_ltrim(p, "\n\r");
+					if (*p == '\0')
+						break;
 					metric = p;
 					if (NULL == (q = strchr(p, ':')))
 						continue;
@@ -1268,11 +1269,11 @@ static void	process_active_checks(char *server, unsigned short port)
                          foo.bar:12
 
                         */
-                        if (0 == strncmp(active_metrics[i].collector.metrics[j], "udcollector.", 12)) {
-                            match_offset = 12;
-                        } else {
-                            match_offset = 0;
-                        }
+						if (0 == strncmp(active_metrics[i].collector.metrics[j], "udcollector.", 12)) {
+							match_offset = 12;
+						} else {
+							match_offset = 0;
+						}
                         if (0 == strcmp(active_metrics[i].collector.metrics[j]+match_offset, metric))
 							process_value(server, port, CONFIG_HOSTNAME, active_metrics[i].collector.metrics[j], metric_result,
 										  &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
