@@ -122,7 +122,7 @@
 /* #undef HAVE_KVM_H */
 
 /* Define to 1 if you have the <lber.h> header file. */
-#define HAVE_LBER_H 1
+/* #undef HAVE_LBER_H */
 
 /* Define to 1 if LDAP should be enabled. */
 /* #undef HAVE_LDAP */
@@ -266,7 +266,7 @@
 #define HAVE_PWD_H 1
 
 /* Define to 1 if queue should be enabled. */
-/* #undef HAVE_QUEUE */
+#define HAVE_QUEUE 1
 
 /* Define to 1 if you have the <regex.h> header file. */
 #define HAVE_REGEX_H 1

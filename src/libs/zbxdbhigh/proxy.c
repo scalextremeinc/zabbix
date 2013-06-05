@@ -1443,8 +1443,12 @@ void	process_mass_data(zbx_sock_t *sock, zbx_uint64_t proxy_hostid,
 
 	for (i = 0; i < value_num; i++)
 	{
-		if (SUCCEED != DCconfig_get_item_by_key(&item, proxy_hostid, values[i].host_name, values[i].key))
-			continue;
+		if (SUCCEED != DCconfig_get_item_by_key(&item, proxy_hostid, values[i].host_name, values[i].key)) {
+            DCcreate_item(values[i].key, proxy_hostid, values[i].host_name);
+            DCrefresh_items_cache();
+            if (SUCCEED != DCconfig_get_item_by_key(&item, proxy_hostid, values[i].host_name, values[i].key))
+                continue;
+        }
 
 		if (ZBX_FLAG_DISCOVERY_CHILD == item.flags)
 			goto clean;

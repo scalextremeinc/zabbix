@@ -4564,3 +4564,68 @@ void	DCget_user_macro(zbx_uint64_t *hostids, int host_num, const char *macro, ch
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
+
+void DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
+    ZBX_DC_HOST *host;
+    zbx_uint64_t itemid = DBget_maxid("items");
+    char *name = key;
+    int value_type = 0;
+    int delay = 60;
+    int data_type = 0;
+    int type = 7;
+    char *units = "";
+    char *delay_flex = "";
+    char *trapper_hosts = "";
+    char *logtimefmt = "";
+    char *ipmi_sensor = "";
+    char *snmp_community = "";
+    char *snmp_oid = "";
+    char *port = "";
+    char *snmpv3_securityname = "";
+    char *snmpv3_authpassphrase = "";
+    char *snmpv3_privpassphrase = "";
+    char *username = "";
+    char *password = "";
+    char *publickey = "";
+    char *privatekey = "";
+
+    zabbix_log(LOG_LEVEL_INFORMATION, "Autocreating item: %s", key);
+    
+    host = DCfind_host(proxy_hostid, host_name);
+    
+    DBexecute(
+        "insert into items"
+        " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
+            "logtimefmt,ipmi_sensor,snmp_community,snmp_oid,port,snmpv3_securityname,"
+            "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey)"
+        " values (" ZBX_FS_UI64 ",'%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
+        "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')",
+        itemid, name, key, host->hostid, type, value_type, data_type, delay,
+        delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
+        port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
+        password, publickey, privatekey);
+}
+
+void DCrefresh_items_cache() {
+    DB_RESULT item_result;
+    
+	item_result = DBselect(
+        "select i.itemid,i.hostid,h.proxy_hostid,i.type,i.data_type,i.value_type,i.key_,"
+            "i.snmp_community,i.snmp_oid,i.port,i.snmpv3_securityname,"
+            "i.snmpv3_securitylevel,i.snmpv3_authpassphrase,i.snmpv3_privpassphrase,"
+            "i.ipmi_sensor,i.delay,i.delay_flex,i.trapper_hosts,i.logtimefmt,i.params,"
+            "i.status,i.authtype,i.username,i.password,i.publickey,i.privatekey,"
+            "i.flags,i.interfaceid"
+        " from items i,hosts h"
+        " where i.hostid=h.hostid"
+            " and h.status in (%d)"
+            " and i.status in (%d,%d)"
+            DB_NODE,
+        HOST_STATUS_MONITORED,
+        ITEM_STATUS_ACTIVE, ITEM_STATUS_NOTSUPPORTED,
+        DBnode_local("i.itemid"));
+    
+    DCsync_items(item_result);
+    
+    DBfree_result(item_result);
+}
