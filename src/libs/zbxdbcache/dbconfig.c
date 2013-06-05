@@ -4565,8 +4565,31 @@ void	DCget_user_macro(zbx_uint64_t *hostids, int host_num, const char *macro, ch
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
+static int find_app_name(char *key, char* app_name, size_t n) {
+    char c;
+    int i = 0, j = 0;
+    do {
+        c = key[i];
+        if (c == '.' && key[i + 1] != '\0') {
+            j = i > n - 1 ? n - 1 : i;
+            memcpy(app_name, key, j);
+            app_name[j] = '\0';
+            return 0;
+        }
+        i++;
+    } while (c != '\0');
+    return -1;
+}
+
 void DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     ZBX_DC_HOST *host;
+    DB_RESULT result;
+    DB_ROW row;
+    const size_t MAX_NAME_LEN = 256;
+    char app_name[MAX_NAME_LEN];
+    zbx_uint64_t applicationid;
+    zbx_uint64_t itemappid;
+    
     zbx_uint64_t itemid = DBget_maxid("items");
     char *name = key;
     int value_type = 0;
@@ -4604,6 +4627,25 @@ void DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) 
         delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
         port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
         password, publickey, privatekey);
+    
+    if (find_app_name(key, app_name, MAX_NAME_LEN) == 0) {
+        result = DBselect("select applicationid from applications where hostid=" ZBX_FS_UI64 
+            " and name='%s'", host->hostid, app_name);
+        if (NULL != (row = DBfetch(result))) {
+            ZBX_STR2UINT64(applicationid, row[0]);
+        } else {
+            // insert new application
+            zabbix_log(LOG_LEVEL_INFORMATION, "Creating new application: %s", app_name);
+            applicationid = DBget_maxid("applications");
+            DBexecute("insert into applications (applicationid,hostid,name) values ("
+                ZBX_FS_UI64","ZBX_FS_UI64",'%s')", applicationid, host->hostid, app_name);
+        }
+        DBfree_result(result);
+        
+        itemappid = DBget_maxid("items_applications");
+        DBexecute("insert into items_applications (itemappid,applicationid,itemid) values ("
+                ZBX_FS_UI64","ZBX_FS_UI64","ZBX_FS_UI64")", itemappid, applicationid, itemid);
+    }
 }
 
 void DCrefresh_items_cache() {
