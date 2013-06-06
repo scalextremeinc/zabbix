@@ -4581,7 +4581,7 @@ static int find_app_name(char *key, char* app_name, size_t n) {
     return -1;
 }
 
-void DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
+int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     ZBX_DC_HOST *host;
     DB_RESULT result;
     DB_ROW row;
@@ -4589,6 +4589,7 @@ void DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) 
     char app_name[MAX_NAME_LEN];
     zbx_uint64_t applicationid;
     zbx_uint64_t itemappid;
+    int ret = -1;
     
     zbx_uint64_t itemid = DBget_maxid("items");
     char *name = key;
@@ -4616,36 +4617,35 @@ void DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) 
     
     host = DCfind_host(proxy_hostid, host_name);
     
-    DBexecute(
-        "insert into items"
-        " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
-            "logtimefmt,ipmi_sensor,snmp_community,snmp_oid,port,snmpv3_securityname,"
-            "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey)"
-        " values (" ZBX_FS_UI64 ",'%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
-        "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')",
-        itemid, name, key, host->hostid, type, value_type, data_type, delay,
-        delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
-        port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
-        password, publickey, privatekey);
-    
     if (find_app_name(key, app_name, MAX_NAME_LEN) == 0) {
         result = DBselect("select applicationid from applications where hostid=" ZBX_FS_UI64 
             " and name='%s'", host->hostid, app_name);
         if (NULL != (row = DBfetch(result))) {
             ZBX_STR2UINT64(applicationid, row[0]);
-        } else {
-            // insert new application
-            zabbix_log(LOG_LEVEL_INFORMATION, "Creating new application: %s", app_name);
-            applicationid = DBget_maxid("applications");
-            DBexecute("insert into applications (applicationid,hostid,name) values ("
-                ZBX_FS_UI64","ZBX_FS_UI64",'%s')", applicationid, host->hostid, app_name);
+            
+            DBexecute(
+                "insert into items"
+                " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
+                    "logtimefmt,ipmi_sensor,snmp_community,snmp_oid,port,snmpv3_securityname,"
+                    "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey)"
+                " values (" ZBX_FS_UI64 ",'%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
+                "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')",
+                itemid, name, key, host->hostid, type, value_type, data_type, delay,
+                delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
+                port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
+                password, publickey, privatekey);
+            
+            itemappid = DBget_maxid("items_applications");
+            DBexecute("insert into items_applications (itemappid,applicationid,itemid) values ("
+                    ZBX_FS_UI64","ZBX_FS_UI64","ZBX_FS_UI64")", itemappid, applicationid, itemid);
+            
+            ret = 0;
+            
         }
         DBfree_result(result);
-        
-        itemappid = DBget_maxid("items_applications");
-        DBexecute("insert into items_applications (itemappid,applicationid,itemid) values ("
-                ZBX_FS_UI64","ZBX_FS_UI64","ZBX_FS_UI64")", itemappid, applicationid, itemid);
     }
+    
+    return ret;
 }
 
 void DCrefresh_items_cache() {
