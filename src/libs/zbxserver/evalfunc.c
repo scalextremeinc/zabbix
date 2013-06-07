@@ -272,8 +272,11 @@ static int	evaluate_LOGSEVERITY(char *value, DB_ITEM *item, const char *function
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
 
-	if (ITEM_VALUE_TYPE_LOG != item->value_type)
+	if (ITEM_VALUE_TYPE_LOG != item->value_type) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "[%s] UNKNOWN wrong item value type, itemid: %s",
+            __function_name, item->itemid);
 		goto clean;
+    }
 
 	if (NULL == item->h_lastseverity)
 	{
@@ -285,7 +288,7 @@ static int	evaluate_LOGSEVERITY(char *value, DB_ITEM *item, const char *function
 			res = SUCCEED;
 		}
 		else
-			zabbix_log(LOG_LEVEL_DEBUG, "result for LOGSEVERITY is empty");
+			zabbix_log(LOG_LEVEL_INFORMATION, "[%s] UNKNOWN result for LOGSEVERITY is empty, itemid: %s", __function_name, item->itemid);
 		DBfree_history(h_value);
 	}
 	else
