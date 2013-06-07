@@ -4574,10 +4574,12 @@ static int find_app_name(char *key, char* app_name, size_t n) {
             j = i > n - 1 ? n - 1 : i;
             memcpy(app_name, key, j);
             app_name[j] = '\0';
+            zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] App name found");
             return 0;
         }
         i++;
     } while (c != '\0');
+    zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] App name not found");
     return -1;
 }
 
@@ -4613,16 +4615,17 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     char *publickey = "";
     char *privatekey = "";
 
-    zabbix_log(LOG_LEVEL_INFORMATION, "Autocreating item: %s", key);
+    zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Autocreating item: %s", key);
     
     host = DCfind_host(proxy_hostid, host_name);
     
     if (find_app_name(key, app_name, MAX_NAME_LEN) == 0) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Getting applications from db");
         result = DBselect("select applicationid from applications where hostid=" ZBX_FS_UI64 
             " and name='%s'", host->hostid, app_name);
         if (NULL != (row = DBfetch(result))) {
             ZBX_STR2UINT64(applicationid, row[0]);
-            
+            zabbix_log(LOG_LEVEL_INFORMATION, "Application found");
             DBexecute(
                 "insert into items"
                 " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
@@ -4634,17 +4637,19 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
                 delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
                 port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
                 password, publickey, privatekey);
-            
+            zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item inserted");
             itemappid = DBget_maxid("items_applications");
             DBexecute("insert into items_applications (itemappid,applicationid,itemid) values ("
                     ZBX_FS_UI64","ZBX_FS_UI64","ZBX_FS_UI64")", itemappid, applicationid, itemid);
-            
+            zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item-Application inserted");
             ret = 0;
             
         }
         DBfree_result(result);
+        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Result freed");
     }
     
+    zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Ret status: %d", ret);
     return ret;
 }
 
