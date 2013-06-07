@@ -4584,7 +4584,7 @@ static int find_app_name(char *key, char* app_name, size_t n) {
 }
 
 int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
-    ZBX_DC_HOST *host;
+    ZBX_DC_HOST *host = NULL;
     DB_RESULT result;
     DB_ROW row;
     const size_t MAX_NAME_LEN = 256;
@@ -4619,7 +4619,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     
     host = DCfind_host(proxy_hostid, host_name);
     
-    if (find_app_name(key, app_name, MAX_NAME_LEN) == 0) {
+    if (NULL != host && find_app_name(key, app_name, MAX_NAME_LEN) == 0) {
         zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Getting applications from db");
         result = DBselect("select applicationid from applications where hostid=" ZBX_FS_UI64 
             " and name='%s'", host->hostid, app_name);
@@ -4647,6 +4647,8 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
         }
         DBfree_result(result);
         zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Result freed");
+    } else if (NULL == host) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] host not found: %s", host_name);
     }
     
     zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Ret status: %d", ret);
