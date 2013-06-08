@@ -1,0 +1,43 @@
+{
+    "request": "agent data",
+    "data": [
+        {
+            "host": "A3778C40034",
+            "key": "eventlog[\"Security\",,,,,,skip]",
+            "value": "A Windows Filtering Platform filter has been changed.\r\n\t",
+            "lastlogsize": 586155,
+            "timestamp": 1357633164,
+            "source": "Microsoft-Windows-Security-Auditing",
+            "severity": 8,
+            "eventid": 5447,
+            "clock": 1357633164,
+            "ns": 733472000
+        },
+        {
+            "host": "A3778C40034",
+            "key": "eventlog[\"Security\",,,,,,skip]",
+            "value": "A Windows Filtering Platform filter has been changed.\r\n\t",
+            "lastlogsize": 586155,
+            "timestamp": 1357633164,
+            "source": "Microsoft-Windows-Security-Auditing",
+            "severity": 8,
+            "eventid": 5447,
+            "clock": 1357633164,
+            "ns": 733472000
+        },
+        {
+            "host": "A3778C40034",
+            "key": "eventlog[\"Security\",,,,,,skip]",
+            "value": "A Windows Filtering Platform filter has been changed.\r\n\t",
+            "lastlogsize": 586155,
+            "timestamp": 1357633164,
+            "source": "Microsoft-Windows-Security-Auditing",
+            "severity": 8,
+            "eventid": 5447,
+            "clock": 1357633164,
+            "ns": 733472000
+        }
+    ],
+    "clock": 1357633165,
+    "ns": 802728080
+}
