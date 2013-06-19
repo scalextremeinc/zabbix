@@ -748,7 +748,8 @@ static int	process_value(
 		const char	*source,
 		unsigned short	*severity,
 		unsigned long	*logeventid,
-		unsigned char	persistent
+		unsigned char	persistent,
+        zbx_timespec_t *ts
 )
 {
 	const char			*__function_name = "process_value";
@@ -827,7 +828,12 @@ static int	process_value(
 	if (NULL != logeventid)
 		el->logeventid = (int)*logeventid;
 
-	zbx_timespec(&el->ts);
+    if (ts == NULL) {
+        zbx_timespec(&el->ts);
+    } else {
+        el->ts.sec = ts->sec;
+        el->ts.ns = ts->ns;
+    }
 	el->persistent	= persistent;
 
 	if (0 != persistent)
@@ -939,7 +945,7 @@ static void	process_active_checks(char *server, unsigned short port)
 					{
 						send_err = process_value(server, port, CONFIG_HOSTNAME,
 								active_metrics[i].key_orig, value, &lastlogsize,
-								NULL, NULL, NULL, NULL,	NULL, 1);
+								NULL, NULL, NULL, NULL,	NULL, 1, NULL);
 						s_count++;
 					}
 					p_count++;
@@ -976,7 +982,7 @@ static void	process_active_checks(char *server, unsigned short port)
 
 				process_value(server, port, CONFIG_HOSTNAME,
 						active_metrics[i].key_orig, ZBX_NOTSUPPORTED,
-						&active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
+						&active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0, NULL);
 			}
 		}
 		/* special processing for log files with rotation */
@@ -1040,7 +1046,7 @@ static void	process_active_checks(char *server, unsigned short port)
 					{
 						send_err = process_value(server, port, CONFIG_HOSTNAME,
 								active_metrics[i].key_orig, value, &lastlogsize,
-								&mtime, NULL, NULL, NULL, NULL, 1);
+								&mtime, NULL, NULL, NULL, NULL, 1, NULL);
 						s_count++;
 					}
 					p_count++;
@@ -1082,7 +1088,7 @@ static void	process_active_checks(char *server, unsigned short port)
 				process_value(server, port, CONFIG_HOSTNAME,
 						active_metrics[i].key_orig, ZBX_NOTSUPPORTED,
 						&active_metrics[i].lastlogsize, &active_metrics[i].mtime,
-						NULL, NULL, NULL, NULL, 0);
+						NULL, NULL, NULL, NULL, 0, NULL);
 			}
 		}
 		/* special processing for eventlog */
@@ -1180,7 +1186,7 @@ static void	process_active_checks(char *server, unsigned short port)
 					{
 						send_err = process_value(server, port, CONFIG_HOSTNAME,
 								active_metrics[i].key_orig, value, &lastlogsize,
-								NULL, &timestamp, source, &severity, &logeventid, 1);
+								NULL, &timestamp, source, &severity, &logeventid, 1, NULL);
 						s_count++;
 					}
 					p_count++;
@@ -1221,7 +1227,7 @@ static void	process_active_checks(char *server, unsigned short port)
 
 				process_value(server, port, CONFIG_HOSTNAME,
 						active_metrics[i].key_orig, ZBX_NOTSUPPORTED,
-						&active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
+						&active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0, NULL);
 			}
 		}
 		/* scalex: special processing for collectors */
@@ -1232,7 +1238,9 @@ static void	process_active_checks(char *server, unsigned short port)
 			ret = FAIL;
 
 			do{ /* simple try realization */
-				char *p, *q, *metric, *metric_result;
+				char *p, *q, *metric, *metric_result, *sec, *ns;
+                zbx_timespec_t ts, *ts_ptr;
+                
 
 				zabbix_log(LOG_LEVEL_WARNING, "executing collector: %s\n", active_metrics[i].collector.command);
 				if (SYSINFO_RET_FAIL == EXECUTE_STR(active_metrics[i].key, active_metrics[i].collector.command, 0, &result))
@@ -1243,6 +1251,9 @@ static void	process_active_checks(char *server, unsigned short port)
 					break;
 
 				for (p = *pvalue; p && *p; ) {
+                    sec = NULL;
+                    ns = NULL;
+                    ts_ptr = NULL;
 					zbx_ltrim(p, "\n\r");
 					if (*p == '\0')
 						break;
@@ -1251,16 +1262,38 @@ static void	process_active_checks(char *server, unsigned short port)
 						continue;
 					*q++ = '\0';
 					metric_result = q;
+                    
 					if (NULL != (p = strchr(q, '\n')))
 						*p++ = '\0';
+                    
+                    if (NULL != (q = strchr(metric_result, ':'))) {
+                        *q++ = '\0';
+                        sec = q;
+                        if (NULL != (q = strchr(q, ':'))) {
+                            *q++ = '\0';
+                            ns = q;
+                            zbx_ltrim(ns, "\t ");
+                            zbx_rtrim(ns, "\t ");
+                            ts.ns = atoi(ns);
+                        } else {
+                            ts.ns = 0;
+                        }
+                        zbx_ltrim(sec, "\t ");
+                        zbx_rtrim(sec, "\t ");
+                        ts.sec = atoi(sec);
+                        ts_ptr = &ts;
+                    }
+                    
                     zbx_ltrim(metric, "\t ");
                     zbx_rtrim(metric, "\t ");
                     zbx_ltrim(metric_result, "\t ");
                     zbx_rtrim(metric_result, "\t ");
-					zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> result=<%s>\n", metric, metric_result);
+                    
+					zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> result=<%s> sec=<%s> ns=<%s>\n",
+                        metric, metric_result, sec, ns);
 
                     process_value(server, port, CONFIG_HOSTNAME, metric, metric_result,
-                                  &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
+                                  &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0, ts_ptr);
 
 				}
 				ret = SUCCEED;
@@ -1278,7 +1311,7 @@ static void	process_active_checks(char *server, unsigned short port)
 					
 					process_value(server, port, CONFIG_HOSTNAME,
 								  active_metrics[i].collector.metrics[j], ZBX_ERROR,
-								  &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0);
+								  &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0, NULL);
 				}
 			}
 		}
@@ -1295,7 +1328,7 @@ static void	process_active_checks(char *server, unsigned short port)
 
 				process_value(server, port, CONFIG_HOSTNAME,
 						active_metrics[i].key_orig, *pvalue, NULL,
-						NULL, NULL, NULL, NULL, NULL, 0);
+						NULL, NULL, NULL, NULL, NULL, 0, NULL);
 
 				if (0 == strcmp(*pvalue, ZBX_NOTSUPPORTED))
 				{
