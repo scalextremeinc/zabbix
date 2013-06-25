@@ -26,6 +26,9 @@
 
 int	process_eventlog(const char *source, zbx_uint64_t *lastlogsize, unsigned long *out_timestamp,
 		char **out_source, unsigned short *out_severity, char **out_message, unsigned long *out_eventid,
-		unsigned char skip_old_data);
+		unsigned char skip_old_data, void** pcontext);
+
+void close_eventlog_context(void*);
+int get_eventlog_keywords(void*, zbx_uint64_t*);
 
 #endif /* ZABBIX_EVENTLOG_H */

@@ -47,6 +47,9 @@ extern int	CONFIG_LISTEN_PORT;
 #	ifndef ERROR_TYPE
 #		define ERROR_TYPE	"Error"
 #	endif
+#	ifndef CRITICAL_TYPE
+#		define CRITICAL_TYPE	"Critical"
+#	endif
 #	ifndef AUDIT_FAILURE
 #		define AUDIT_FAILURE	"Failure Audit"
 #	endif

@@ -694,7 +694,7 @@ static int	send_buffer(const char *host, unsigned short port)
 		for (i = 0; i < buffer.count; i++)
 		{
 			el = &buffer.data[i];
-
+			
 			zbx_free(el->host);
 			zbx_free(el->key);
 			zbx_free(el->value);
@@ -1094,6 +1094,7 @@ static void	process_active_checks(char *server, unsigned short port)
 		/* special processing for eventlog */
 		else if (0 == strncmp(active_metrics[i].key, "eventlog[", 9))
 		{
+			void *context = NULL;
 			ret = FAIL;
 #ifdef _WINDOWS
 			do{ /* simple try realization */
@@ -1139,7 +1140,7 @@ static void	process_active_checks(char *server, unsigned short port)
 
 				while (SUCCEED == (ret = process_eventlog(filename, &lastlogsize,
 						&timestamp, &source, &severity, &value, &logeventid,
-						active_metrics[i].skip_old_data)))
+						active_metrics[i].skip_old_data, &context)))
 				{
 					active_metrics[i].skip_old_data = 0;
 
@@ -1149,32 +1150,76 @@ static void	process_active_checks(char *server, unsigned short port)
 						active_metrics[i].lastlogsize = lastlogsize;
 						break;
 					}
-
-					switch (severity)
+					
+					if (context != NULL) // windows > 2008
 					{
-						case EVENTLOG_SUCCESS:
-						case EVENTLOG_INFORMATION_TYPE:
-							severity = 1;
-							zbx_snprintf(str_severity, sizeof(str_severity), INFORMATION_TYPE);
-							break;
-						case EVENTLOG_WARNING_TYPE:
-							severity = 2;
-							zbx_snprintf(str_severity, sizeof(str_severity), WARNING_TYPE);
-							break;
-						case EVENTLOG_ERROR_TYPE:
-							severity = 4;
-							zbx_snprintf(str_severity, sizeof(str_severity), ERROR_TYPE);
-							break;
-						case EVENTLOG_AUDIT_FAILURE:
-							severity = 7;
-							zbx_snprintf(str_severity, sizeof(str_severity), AUDIT_FAILURE);
-							break;
-						case EVENTLOG_AUDIT_SUCCESS:
-							severity = 8;
-							zbx_snprintf(str_severity, sizeof(str_severity), AUDIT_SUCCESS);
-							break;
+						zbx_uint64_t keywords;
+						
+						switch (severity)
+						{
+							case 0: // audit success
+								if (SUCCEED == get_eventlog_keywords(context, &keywords))
+								{
+									if (keywords == 0x8020000000000000)
+									{
+										severity = 8;
+										zbx_snprintf(str_severity, sizeof(str_severity), AUDIT_SUCCESS);
+									}
+									else
+									{
+										zabbix_log(LOG_LEVEL_INFORMATION, "SOURCE=%s VALUE=%llu KEYWORDS=0x%llx", source, lastlogsize, keywords);
+										severity = 7;
+										zbx_snprintf(str_severity, sizeof(str_severity), AUDIT_FAILURE);
+									}
+								}
+								break;
+							case 1: // critical
+								severity = 5;
+								zbx_snprintf(str_severity, sizeof(str_severity), CRITICAL_TYPE);
+								break;
+							case 2:	// error
+								severity = 4;
+								zbx_snprintf(str_severity, sizeof(str_severity), ERROR_TYPE);
+								break;
+							case 3: // warning
+								severity = 2;
+								zbx_snprintf(str_severity, sizeof(str_severity), WARNING_TYPE);
+								break;
+							case 4:	// information
+								severity = 1;
+								zbx_snprintf(str_severity, sizeof(str_severity), INFORMATION_TYPE);
+								break;
+							default:
+								zabbix_log(LOG_LEVEL_INFORMATION, "SEVERITY UNKNOWN: %d\n", severity);
+						}
 					}
-
+					else
+					{
+						switch (severity)
+						{
+							case EVENTLOG_SUCCESS:
+							case EVENTLOG_INFORMATION_TYPE:
+								severity = 1;
+								zbx_snprintf(str_severity, sizeof(str_severity), INFORMATION_TYPE);
+								break;
+							case EVENTLOG_WARNING_TYPE:
+								severity = 2;
+								zbx_snprintf(str_severity, sizeof(str_severity), WARNING_TYPE);
+								break;
+							case EVENTLOG_ERROR_TYPE:
+								severity = 4;
+								zbx_snprintf(str_severity, sizeof(str_severity), ERROR_TYPE);
+								break;
+							case EVENTLOG_AUDIT_FAILURE:
+								severity = 7;
+								zbx_snprintf(str_severity, sizeof(str_severity), AUDIT_FAILURE);
+								break;
+							case EVENTLOG_AUDIT_SUCCESS:
+								severity = 8;
+								zbx_snprintf(str_severity, sizeof(str_severity), AUDIT_SUCCESS);
+								break;
+						}
+					}
 					zbx_snprintf(str_logeventid, sizeof(str_logeventid), "%lu", logeventid);
 
 					if (SUCCEED == regexp_match_ex(regexps, regexps_num, value, pattern, ZBX_CASE_SENSITIVE) &&
@@ -1193,7 +1238,7 @@ static void	process_active_checks(char *server, unsigned short port)
 
 					zbx_free(source);
 					zbx_free(value);
-
+					
 					if (SUCCEED == send_err)
 						active_metrics[i].lastlogsize = lastlogsize;
 					else
@@ -1203,7 +1248,7 @@ static void	process_active_checks(char *server, unsigned short port)
 						lastlogsize = active_metrics[i].lastlogsize;
 						goto ret;
 					}
-
+					
 					/* do not flood Zabbix server if file grows too fast */
 					if (s_count >= (maxlines_persec * active_metrics[i].refresh))
 						break;
@@ -1212,6 +1257,7 @@ static void	process_active_checks(char *server, unsigned short port)
 					if (p_count >= (4 * maxlines_persec * active_metrics[i].refresh))
 						break;
 				} /* while processing an eventlog */
+				close_eventlog_context(context);
 
 				break;
 
@@ -1365,7 +1411,8 @@ ZBX_THREAD_ENTRY(active_checks_thread, args)
 	init_active_metrics();
 	
 #if 0
-	parse_list_of_checks(json_fgb);
+	disable_all_metrics();
+	add_check("eventlog[security]", "\0", 0, 0, 0, NULL, NULL);
 	process_active_checks(activechk_args.host, activechk_args.port);
 	ZBX_DO_EXIT();
 	zbx_thread_exit(0);
