@@ -1272,22 +1272,22 @@ static void	process_active_checks(char *server, unsigned short port)
                         if (NULL != (q = strchr(q, ':'))) {
                             *q++ = '\0';
                             ns = q;
-                            zbx_ltrim(ns, "\t ");
-                            zbx_rtrim(ns, "\t ");
+                            zbx_ltrim(ns, "\r\t ");
+                            zbx_rtrim(ns, "\r\t ");
                             ts.ns = atoi(ns);
                         } else {
                             ts.ns = 0;
                         }
-                        zbx_ltrim(sec, "\t ");
-                        zbx_rtrim(sec, "\t ");
+                        zbx_ltrim(sec, "\r\t ");
+                        zbx_rtrim(sec, "\r\t ");
                         ts.sec = atoi(sec);
                         ts_ptr = &ts;
                     }
                     
-                    zbx_ltrim(metric, "\t ");
-                    zbx_rtrim(metric, "\t ");
-                    zbx_ltrim(metric_result, "\t ");
-                    zbx_rtrim(metric_result, "\t ");
+                    zbx_ltrim(metric, "\r\t ");
+                    zbx_rtrim(metric, "\r\t ");
+                    zbx_ltrim(metric_result, "\r\t ");
+                    zbx_rtrim(metric_result, "\r\t ");
                     
 					zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> result=<%s> sec=<%s> ns=<%s>\n",
                         metric, metric_result, sec, ns);
