@@ -191,10 +191,10 @@
 /* #undef HAVE_MTENT_H */
 
 /* Define to 1 if database supports multirow insert statements. */
-/* #undef HAVE_MULTIROW_INSERT */
+#define HAVE_MULTIROW_INSERT 1
 
 /* Define to 1 if MySQL libraries are available */
-/* #undef HAVE_MYSQL */
+#define HAVE_MYSQL 1
 
 /* Define to 1 if you have the <netdb.h> header file. */
 #define HAVE_NETDB_H 1
@@ -266,7 +266,7 @@
 #define HAVE_PWD_H 1
 
 /* Define to 1 if queue should be enabled. */
-/* #undef HAVE_QUEUE */
+#define HAVE_QUEUE 1
 
 /* Define to 1 if you have the <regex.h> header file. */
 #define HAVE_REGEX_H 1
@@ -500,7 +500,7 @@
 /* #undef HAVE_WS2TCPIP_H */
 
 /* Define to 1 if you have the <zmq.h> header file. */
-/* #undef HAVE_ZMQ_H */
+#define HAVE_ZMQ_H 1
 
 /* Define to 1 if macro '__VA_ARGS__' exists. */
 #define HAVE___VA_ARGS__ 1
