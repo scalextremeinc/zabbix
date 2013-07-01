@@ -295,6 +295,7 @@ int resolveDNS( char * szServerName )
     return status;
 }
 
+STACK_OF(SSL_COMP) *ssl_comp_methods = NULL;
 
 int sx_ssl_connect( zbx_sock_t * s, const char * szService )
 {
@@ -394,6 +395,28 @@ int sx_ssl_connect( zbx_sock_t * s, const char * szService )
     s->ssl = ssl;
     //SSL_CTX_free(ctx);
 
+    if (!COMP_zlib() || COMP_zlib()->type == NID_undef)
+        zabbix_log(LOG_LEVEL_DEBUG, "No ZLIB support\n");
+    else {
+        if (SSL_COMP_add_compression_method(1, COMP_zlib()) != 0)
+            zabbix_log(LOG_LEVEL_WARNING, "Failed to enable ZLIB compression\n");
+        zabbix_log(LOG_LEVEL_DEBUG, "Enabled ZLIB compression\n");
+    }
+
+    ssl_comp_methods = SSL_COMP_get_compression_methods();
+	zabbix_log(LOG_LEVEL_DEBUG, "Available compression methods:\n");
+	{
+        int j, n = sk_SSL_COMP_num(ssl_comp_methods);
+        if (n == 0)
+            zabbix_log(LOG_LEVEL_DEBUG, "  NONE\n");
+        else
+            for (j = 0; j < n; j++)
+			{
+                SSL_COMP *c = sk_SSL_COMP_value(ssl_comp_methods, j);
+                zabbix_log(LOG_LEVEL_WARNING, "  %d: %s\n", c->id, c->name);
+			}
+	}
+    
     return SUCCEED;
 }
 /******************************************************************************
