@@ -1176,7 +1176,7 @@ static void	process_active_checks(char *server, unsigned short port)
 									}
 									else
 									{
-										zabbix_log(LOG_LEVEL_INFORMATION, "SOURCE=%s VALUE=%llu KEYWORDS=0x%llx", source, lastlogsize, keywords);
+										zabbix_log(LOG_LEVEL_DEBUG, "SOURCE=%s VALUE=%llu KEYWORDS=0x%llx", source, lastlogsize, keywords);
 										severity = 7;
 										zbx_snprintf(str_severity, sizeof(str_severity), AUDIT_FAILURE);
 									}
@@ -1244,10 +1244,10 @@ static void	process_active_checks(char *server, unsigned short port)
 						s_count++;
 					}
 					p_count++;
-
+					
 					zbx_free(source);
 					zbx_free(value);
-					
+
 					if (SUCCEED == send_err)
 						active_metrics[i].lastlogsize = lastlogsize;
 					else
@@ -1421,7 +1421,7 @@ ZBX_THREAD_ENTRY(active_checks_thread, args)
 	
 #if 0
 	disable_all_metrics();
-	add_check("eventlog[security]", "\0", 0, 0, 0, NULL, NULL);
+	add_check("eventlog[application]", "\0", 0, 0, 0, NULL, NULL);
 	process_active_checks(activechk_args.host, activechk_args.port);
 	ZBX_DO_EXIT();
 	zbx_thread_exit(0);

@@ -388,7 +388,6 @@ int	get_eventlog_keywords(void *v, zbx_uint64_t *out_keywords)
 		}
 	}
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "KEYWORDS %llx", eventlog_array[0].UInt64Val);
 	*out_keywords = eventlog_array[0].UInt64Val;
 	ret = SUCCEED;
 	
@@ -515,6 +514,7 @@ static int	zbx_get_eventlog_message_xpath(LPCTSTR wsource, zbx_uint64_t *lastlog
 		status = GetLastError();
 		if (ERROR_NO_MORE_ITEMS == status)
 		{
+			zabbix_log(LOG_LEVEL_DEBUG, "EvtNext no more items.");
 			ret = SUCCEED;
 		}
 		else
@@ -553,44 +553,44 @@ static int	zbx_get_eventlog_message_xpath(LPCTSTR wsource, zbx_uint64_t *lastlog
 	*out_source = zbx_unicode_to_utf8(eventlog_array[0].StringVal);
 	
 	providermetadata_handle = EvtOpenPublisherMetadata(NULL, eventlog_array[0].StringVal, NULL, 0, 0);
-	if (NULL == providermetadata_handle)
+	if (NULL != providermetadata_handle)
 	{
-		zabbix_log(LOG_LEVEL_WARNING, "EvtOpenPublisherMetadata failed with %d", GetLastError());
-		goto finish;
-	}
-
-	dwBufferSize = 0;
-	dwReturned = 0;
-	
-	if (!EvtFormatMessage(providermetadata_handle, context->each_handle, 0, 0,
-						  NULL, EvtFormatMessageEvent, dwBufferSize, tmp_wstr, &dwReturned))
-	{
-		if (ERROR_INSUFFICIENT_BUFFER == (status = GetLastError()))
-		{
-			dwBufferSize = dwReturned;
-			if (NULL == (tmp_wstr = (LPWSTR)zbx_malloc(tmp_wstr, dwBufferSize * sizeof(WCHAR))))
-			{
-				zabbix_log(LOG_LEVEL_WARNING, "EvtFormatMessage malloc failed");
-				goto finish;
-			}
-			if (!EvtFormatMessage(providermetadata_handle, context->each_handle, 0, 0,
-								  NULL, EvtFormatMessageEvent, dwBufferSize, tmp_wstr, &dwReturned))
-			{
-				zabbix_log(LOG_LEVEL_WARNING, "EvtFormatMessage failed");
-				goto finish;
-			}
-		}
+		dwBufferSize = 0;
+		dwReturned = 0;
 		
-		if (ERROR_SUCCESS != (status = GetLastError()))
+		if (!EvtFormatMessage(providermetadata_handle, context->each_handle, 0, 0,
+							  NULL, EvtFormatMessageEvent, dwBufferSize, tmp_wstr, &dwReturned))
 		{
-			zabbix_log(LOG_LEVEL_WARNING, "EvtFormatMessage failed with %d", status);
-			goto finish;
+			if (ERROR_INSUFFICIENT_BUFFER == (status = GetLastError()))
+			{
+				dwBufferSize = dwReturned;
+				if (NULL == (tmp_wstr = (LPWSTR)zbx_malloc(tmp_wstr, dwBufferSize * sizeof(WCHAR))))
+				{
+					zabbix_log(LOG_LEVEL_WARNING, "EvtFormatMessage malloc failed");
+					goto finish;
+				}
+				if (!EvtFormatMessage(providermetadata_handle, context->each_handle, 0, 0,
+									  NULL, EvtFormatMessageEvent, dwBufferSize, tmp_wstr, &dwReturned))
+				{
+					zabbix_log(LOG_LEVEL_WARNING, "EvtFormatMessage failed");
+					goto finish;
+				}
+			}
+			
+			if (ERROR_SUCCESS != (status = GetLastError()))
+			{
+				zabbix_log(LOG_LEVEL_WARNING, "EvtFormatMessage failed with %d", status);
+				goto finish;
+			}
 		}
+		*out_message= zbx_unicode_to_utf8(tmp_wstr);
+	}
+	else
+	{
+		zabbix_log(LOG_LEVEL_DEBUG, "EvtOpenPublisherMetadata failed with %d: no description availabel", GetLastError());
+		*out_message = zbx_strdup(NULL, "");
 	}
 
-	*out_message= zbx_unicode_to_utf8(tmp_wstr);
-
-	zbx_free(tmp_wstr);
 	*out_eventid = eventlog_array[1].UInt16Val;
 	*out_severity = eventlog_array[2].ByteVal;
 	*out_timestamp = (unsigned long)((eventlog_array[3].FileTimeVal - sec_1970) / 10000000);
