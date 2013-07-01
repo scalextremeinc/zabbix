@@ -355,6 +355,8 @@ static int	parse_list_of_checks(char *str)
 			char *parameters;
 			size_t parameters_alloc;
 			int i, nmetrics;
+            char *found_storage;
+            char *new_command;
 
 			nmetrics = zbx_json_count(&jp_collector);
 			metrics = zbx_malloc(metrics, (nmetrics+1)*sizeof(*metrics));
@@ -380,13 +382,7 @@ static int	parse_list_of_checks(char *str)
 				continue;
 			}
 
-            if (0 == strncmp(tmp, "{STORAGE_DIR}", 13)) {
-                command=zbx_malloc(command, MAX_STRING_LEN);
-                zbx_strlcpy(command, storage_dir, MAX_STRING_LEN);
-                zbx_strlcat(command, tmp+13, MAX_STRING_LEN);
-            } else {
-			    command = zbx_strdup(NULL, tmp);
-            }
+            command = zbx_strdup(NULL, tmp);
             
             // append aprameters to command
             if (SUCCEED == zbx_json_brackets_by_name(&jp_collector, "parameters", &jp_params))
@@ -398,6 +394,19 @@ static int	parse_list_of_checks(char *str)
                     zbx_snprintf_alloc(&command, &command_len, &command_offset, " %s",  tmp);
                 
             }
+
+            found_storage = strstr(command, "{STORAGE_DIR}");
+            if (found_storage != NULL) {
+
+                new_command=zbx_malloc(new_command, MAX_STRING_LEN);
+                zbx_strlcpy(new_command, command, found_storage-command);
+                zbx_strlcpy(new_command, storage_dir, MAX_STRING_LEN);
+                zbx_strlcpy(new_command, found_storage+13, MAX_STRING_LEN);
+
+                zbx_free(command);
+                command = new_command;
+            }
+
 
 		}
 
