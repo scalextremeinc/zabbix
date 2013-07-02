@@ -398,15 +398,18 @@ static int	parse_list_of_checks(char *str)
             found_storage = strstr(command, "{STORAGE_DIR}");
             if (found_storage != NULL) {
 
+                zabbix_log(LOG_LEVEL_DEBUG, "before expanding command %s storage %d", command, found_storage-command);
+
                 new_command = NULL;
                 new_command = zbx_malloc(new_command, MAX_STRING_LEN);
-                zbx_strlcpy(new_command, command, found_storage-command);
+                zbx_strlcpy(new_command, command, found_storage-command+1);
                 zbx_strlcat(new_command, storage_dir, MAX_STRING_LEN);
                 zbx_strlcat(new_command, found_storage+13, MAX_STRING_LEN);
 
                 zbx_free(command);
                 command = new_command;
 
+                zabbix_log(LOG_LEVEL_DEBUG, "after expanding command %s", command);
             }
 
 
