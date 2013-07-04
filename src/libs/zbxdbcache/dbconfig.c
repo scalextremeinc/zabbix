@@ -4593,7 +4593,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     zbx_uint64_t itemappid;
     int ret = -1;
     
-    zbx_uint64_t itemid = DBget_maxid("items");
+    zbx_uint64_t itemid;
     char *name = key;
     int value_type = 0;
     int delay = 60;
@@ -4629,6 +4629,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
         if (NULL != (row = DBfetch(result))) {
             ZBX_STR2UINT64(applicationid, row[0]);
             //zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Application found: %s", app_name);
+            itemid = DBget_maxid("items");
             DBexecute(
                 "insert into items"
                 " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
@@ -4648,7 +4649,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
             zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item created: %s, app: %s", key, app_name);
             ret = 0;
         } else {
-            zabbix_log(LOG_LEVEL_INFORMATION, "Skipping item creation, application not found: %s", app_name);
+            zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, application not found: %s", app_name);
         }
         DBfree_result(result);
     } else if (NULL == host) {
