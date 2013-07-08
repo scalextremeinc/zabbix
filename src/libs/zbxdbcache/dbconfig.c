@@ -4594,6 +4594,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     int ret = -1;
     
     zbx_uint64_t itemid;
+    zbx_uint64_t collectorid;
     char *name = key;
     int value_type = 0;
     int delay = 60;
@@ -4614,6 +4615,9 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     char *password = "";
     char *publickey = "";
     char *privatekey = "";
+    char *sql = NULL;
+    size_t sql_offset = 0;
+    size_t sql_alloc = 512;
 
     zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Checking for autocreate, item: %s", key);
     
@@ -4628,19 +4632,44 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
             " and name='%s'", host->hostid, app_name);
         if (NULL != (row = DBfetch(result))) {
             ZBX_STR2UINT64(applicationid, row[0]);
+            DBfree_result(result);
             //zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Application found: %s", app_name);
+
             itemid = DBget_maxid("items");
-            DBexecute(
-                "insert into items"
-                " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
-                    "logtimefmt,ipmi_sensor,snmp_community,snmp_oid,port,snmpv3_securityname,"
-                    "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey)"
-                " values (" ZBX_FS_UI64 ",'%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
-                "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')",
-                itemid, name, key, host->hostid, type, value_type, data_type, delay,
-                delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
-                port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
-                password, publickey, privatekey);
+            sql = zbx_malloc(sql, sql_alloc);
+
+            result = DBselect("select collectorid from items where hostid=" ZBX_FS_UI64 " and key_='%s.scalextreme.placeholder.alpha' limit 1", host->hostid, app_name);
+            if (NULL != (row = DBfetch(result))) {
+                ZBX_STR2UINT64(collectorid, row[0]);
+                DBfree_result(result);
+                zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
+                    "insert into items"
+                    " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
+                        "logtimefmt,ipmi_sensor,snmp_community,snmp_oid,port,snmpv3_securityname,"
+                        "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey,collectorid)"
+                    " values (" ZBX_FS_UI64 ",'%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
+                    "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s', " ZBX_FS_UI64 ")",
+                    itemid, name, key, host->hostid, type, value_type, data_type, delay,
+                    delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
+                    port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
+                    password, publickey, privatekey, collectorid);
+            } else {
+                DBfree_result(result);
+                zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
+                    "insert into items"
+                    " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
+                        "logtimefmt,ipmi_sensor,snmp_community,snmp_oid,port,snmpv3_securityname,"
+                        "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey)"
+                    " values (" ZBX_FS_UI64 ",'%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
+                    "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')",
+                    itemid, name, key, host->hostid, type, value_type, data_type, delay,
+                    delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
+                    port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
+                    password, publickey, privatekey);
+            }
+
+            DBexecute("%s", sql);
+            zbx_free(sql);
             
             itemappid = DBget_maxid("items_applications");
             DBexecute("insert into items_applications (itemappid,applicationid,itemid) values ("
@@ -4649,9 +4678,9 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
             zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item created: %s, app: %s", key, app_name);
             ret = 0;
         } else {
+            DBfree_result(result);
             zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, application not found: %s", app_name);
         }
-        DBfree_result(result);
     } else if (NULL == host) {
         zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, host not found: %s", host_name);
     }
