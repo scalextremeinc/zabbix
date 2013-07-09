@@ -1571,6 +1571,7 @@ int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
 	if (NULL == values)
 		values = zbx_malloc(values, VALUES_MAX * sizeof(AGENT_VALUE));
 
+    /* disable time fix to be able to get data buffered by router queue
 	if (SUCCEED == zbx_json_value_by_name_dyn(jp, ZBX_PROTO_TAG_CLOCK, &tmp, &tmp_alloc))
 	{
 		proxy_timediff.sec = ts.sec - atoi(tmp);
@@ -1586,6 +1587,7 @@ int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
 			}
 		}
 	}
+    */
     
     // fill time diff structure - used by the code which sends data to queue
     if (timediff != NULL) {
