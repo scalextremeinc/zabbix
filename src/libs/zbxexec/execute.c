@@ -244,7 +244,9 @@ exit:
 int	zbx_execute(const char *command, char **buffer, char *error, size_t max_error_len, int timeout)
 {
 	char					*p = NULL;
-	size_t					buf_size = MAX_BUFFER_LEN;
+    size_t                  buf_alloc = MAX_BUFFER_LEN;
+    size_t					buf_size = buf_alloc;
+    size_t                  buf_free = buf_alloc;
 	int					ret = FAIL;
 #ifdef _WINDOWS
 	STARTUPINFO				si;
@@ -266,7 +268,7 @@ int	zbx_execute(const char *command, char **buffer, char *error, size_t max_erro
 	{
 		p = zbx_realloc(*buffer, buf_size);
 		*buffer = p;
-		buf_size--;	/* '\0' */
+		buf_free--;	/* '\0' */
 	}
 
 #ifdef _WINDOWS
@@ -354,7 +356,7 @@ int	zbx_execute(const char *command, char **buffer, char *error, size_t max_erro
 	_ftime(&start_time);
 	timeout *= 1000;
 
-	if (NULL != buffer && SUCCEED == (ret = zbx_read_from_pipe(hRead, &p, buf_size, timeout)))
+	if (NULL != buffer && SUCCEED == (ret = zbx_read_from_pipe(hRead, &p, buf_free, timeout)))
 		*p = '\0';
 
 	if (TIMEOUT_ERROR != ret)
@@ -397,11 +399,19 @@ close:
 
 		if (NULL != buffer)
 		{
-			while (0 < (rc = read(fd, p, buf_size)))
+			while (0 < (rc = read(fd, p, buf_free)))
 			{
 				p += rc;
-				if (0 == (buf_size -= rc))
-					break;
+				if (0 == (buf_free -= rc)) {
+					//break;
+                    buf_free = buf_alloc;
+                    buf_size += buf_alloc;
+                    *buffer = zbx_realloc(*buffer, buf_size);
+                    //place pointer at the begining of newly allocated space
+                    p = *buffer + buf_size - buf_alloc - 1;
+                    zabbix_log(LOG_LEVEL_DEBUG, "Reallocated command result buffer, "
+                        "buf_size: %d, buf_alloc: %d", buf_size, buf_alloc);
+                }
 			}
 
 			*p = '\0';
