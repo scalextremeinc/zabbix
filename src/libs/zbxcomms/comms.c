@@ -20,6 +20,10 @@
 #include "common.h"
 #include "comms.h"
 #include "log.h"
+#ifndef NO_PROXY
+#include "proxy.h"
+#include "proxy.c"
+#endif
 
 extern char    *CONFIG_HOSTNAME;
 extern char *CONFIG_MODE;
@@ -297,7 +301,11 @@ int resolveDNS( char * szServerName )
 
 STACK_OF(SSL_COMP) *ssl_comp_methods = NULL;
 
+#ifdef NO_PROXY
 int sx_ssl_connect( zbx_sock_t * s, const char * szService )
+#else
+int sx_ssl_connect( zbx_sock_t * s, const char * ip, unsigned short port )
+#endif
 {
     /*
         ssl for scalextreme
@@ -370,19 +378,100 @@ int sx_ssl_connect( zbx_sock_t * s, const char * szService )
     }
     SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
 
-    
+#ifdef NO_PROXY
     //BIO_set_conn_hostname( bio, "108.166.56.222:https" );
     BIO_set_conn_hostname( bio, szService );
+#else
+    ZBX_TCP_START();
+    
+    zbx_tcp_clean(s);
+    {
+        void *addr;
+        int addrlen, proxy_status;
+        
+#ifdef HAVE_IPV6
+        struct addrinfo *ai = NULL, hints;
+        struct addrinfo *ai_bind = NULL;
+        char service[8];
+        
+        zbx_snprintf(service, sizeof(service), "%d", port);
+        memset(&hints, 0x00, sizeof(struct addrinfo));
+        hints.ai_family = PF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
+        
+        if (0 != getaddrinfo(ip, service, &hints, &ai))
+        {
+            zbx_set_tcp_strerror("cannot resolve [%s]", ip);
+            return FAIL;
+        }
+        addrlen = ai->ai_addrlen;
+        addr = zbx_malloc(NULL, addrlen);
+        memmove(addr, ai->ai_addr, addrlen);
+        freeaddrinfo(ai);
+#else
+        ZBX_SOCKADDR servaddr_in;
+        struct hostent *hp;
+        
+        if (NULL == (hp = gethostbyname(ip)))
+        {
+#if defined(_WINDOWS)
+            zbx_set_tcp_strerror("gethostbyname() failed for '%s': %s", ip, strerror_from_system(WSAGetLastError()));
+#elif defined(HAVE_HSTRERROR)
+            zbx_set_tcp_strerror("gethostbyname() failed for '%s': [%d] %s", ip, h_errno, hstrerror(h_errno));
+#else
+            zbx_set_tcp_strerror("gethostbyname() failed for '%s': [%d]", ip, h_errno);
+#endif
+            return FAIL;
+        }
+        servaddr_in.sin_family  = AF_INET;
+        servaddr_in.sin_addr.s_addr = ((struct in_addr *)(hp->h_addr))->s_addr;
+        servaddr_in.sin_port  = htons(port);
+        addrlen = sizeof(servaddr_in);
+        addr = zbx_malloc(NULL, addrlen);
+        memmove(addr, &servaddr_in, addrlen);
+#endif
+        proxy_status = 0;
+        if((s->socket=proxy_connect(addr, addrlen, &proxy_status)) < 0)
+        {
+            zabbix_log( LOG_LEVEL_ERR, ">>Monitord: ssl connection failed to %s:%d. Error: %s\n", ip, port, ERR_reason_error_string(ERR_get_error()) );
+            switch ( proxy_status )
+            {
+                case PROXY_STATUS_AUTH_FAILED:
+                    zabbix_log( LOG_LEVEL_ERR, "Cannot connect to %s: proxy authorization failed", ip );
+                    break;
+                    
+                case PROXY_STATUS_INVALID:
+                    zabbix_log( LOG_LEVEL_ERR, "Cannot connect to %s: invalid proxy configuration", ip );
+                    break;
+                    
+                case PROXY_STATUS_FAILED:
+                    zabbix_log( LOG_LEVEL_ERR, "Cannot connect to %s: proxy communication failed", ip );
+                    break;
+                    
+                case PROXY_STATUS_REFUSED:
+                    zabbix_log( LOG_LEVEL_ERR, "Cannot connect to %s: proxy connection refused", ip );
+                    break;
+                    
+                default:
+                    zabbix_log( LOG_LEVEL_ERR, "Cannot connect to %s: unknown error", ip );
+            }
+            zbx_free(addr);
+            return FAIL;
+        }
+        SSL_set_fd(ssl, s->socket);
+    }
+#endif
     /* Verify the connection opened and perform the handshake */
-
+    
     if(BIO_do_connect(bio) <= 0)
     {
         /* Handle failed connection */
         zabbix_log( LOG_LEVEL_ERR, ">>Monitord: ssl connection failed. Error: %s\n", ERR_reason_error_string(ERR_get_error()) );
         return FAIL;
     }
+    
     if(BIO_do_handshake(bio) <= 0) {
-        zabbix_log( LOG_LEVEL_ERR, "Error establishing SSL connection\n");
+        zabbix_log( LOG_LEVEL_ERR, "Error establishing SSL connection: %s\n", ERR_reason_error_string(ERR_get_error()) );
         return FAIL;
     }
     else
@@ -583,7 +672,9 @@ int    zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, uns
 {
     if( strcmp(CONFIG_MODE, "https") == 0 )
     {
+#ifdef NO_PROXY
         char        szService[256];
+#endif
         char        szServerName[256];
 
         ZBX_TCP_START();
@@ -597,8 +688,12 @@ int    zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, uns
         {
             zabbix_log( LOG_LEVEL_INFORMATION, ">> ServerName failed to resolve!: %s\n", ip );
         }
+#ifdef NO_PROXY
         zbx_snprintf(szService, 256, "%s:%d", szServerName, port );
         return sx_ssl_connect( s, szService );
+#else
+        return sx_ssl_connect( s, szServerName, port );
+#endif
     }
     else
     {
@@ -624,13 +719,20 @@ int zbx_tcp_connect(zbx_sock_t *s, const char *source_ip, const char *ip, unsign
         if ( resolveDNS( szBuffer ) < 0 )
         {
             zabbix_log( LOG_LEVEL_INFORMATION, ">> ping resolve failed: %s\n", ip );
+#ifdef NO_PROXY
             zbx_snprintf(szService, 300, "%s:%d", ip, port );
             zabbix_log( LOG_LEVEL_INFORMATION, ">> passing name to ssl lib: %s\n", szService );
         } else {
             zbx_snprintf(szService, 300, "%s:%d", szBuffer, port );
+#endif
         }
 
+#ifdef NO_PROXY
         return sx_ssl_connect( s, szService );
+#else
+        return sx_ssl_connect( s, szBuffer, port );
+#endif
+
     }
     else
     {
