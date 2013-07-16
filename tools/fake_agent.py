@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import sys
 import socket
 import struct
@@ -39,4 +40,4 @@ if __name__ == "__main__":
     port = sys.argv[2]
     data = open(sys.argv[3]).read()
     data = update_time(data)
-    print "response:\n%s\n" % zabbix_send(data, host, port)
+    print "* Response:\n%s\n" % zabbix_send(data, host, port)
