@@ -3,6 +3,7 @@ import sys
 import json
 import time
 import urllib2
+from datetime import datetime
 
 def zabbix_proxy_send(data, url='https://localhost/agents/data'):
     """ Sends data to spark proxy.
@@ -43,5 +44,5 @@ if __name__ == "__main__":
     data = open(file).read()
     data = json.loads(data)
     while True:
-        print "* Response: %s" % zabbix_proxy_send(update_time(data), url)
+        print "* Response %s: %s" % (datetime.now(), zabbix_proxy_send(update_time(data), url))
         time.sleep(interval)
