@@ -15,7 +15,6 @@ def zabbix_proxy_send(data, url='https://localhost/agents/data'):
     return rsp.read()
 
 def update_time(data):
-    
     t = time.time()
     clock = int(t)
     ns = int((t - clock) * 1000000000)
@@ -29,20 +28,33 @@ def update_time(data):
         i += 1
     return data
 
+def update_hostname(data, hostname):
+    for d in data['data']:
+        d['host'] = hostname
+    return data
+
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        print "Usage: fake_agent_proxy.py /path/to/data.json https://localhost/agents/data 60"
+        print "Usage: fake_agent_proxy.py /path/to/data.json https://localhost/agents/data 60 A8572C40194"
         exit(1)
     
     file = sys.argv[1]
     url = sys.argv[2]
-    if len(sys.argv) == 4:
+
+    interval = 60
+    if len(sys.argv) >= 4:
         interval = int(sys.argv[3])
-    else:
-        interval = 60
+    
+    hostname = None
+    if len(sys.argv) >= 5:
+        hostname = int(sys.argv[4])
     
     data = open(file).read()
     data = json.loads(data)
+    
+    if hostname:
+        update_hostname(data, hostname)
+    
     while True:
         print "* Response %s: %s" % (datetime.now(), zabbix_proxy_send(update_time(data), url))
         time.sleep(interval)
