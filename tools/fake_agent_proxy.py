@@ -47,7 +47,7 @@ if __name__ == "__main__":
     
     hostname = None
     if len(sys.argv) >= 5:
-        hostname = int(sys.argv[4])
+        hostname = sys.argv[4]
     
     data = open(file).read()
     data = json.loads(data)
