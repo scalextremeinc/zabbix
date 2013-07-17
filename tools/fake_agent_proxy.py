@@ -56,5 +56,11 @@ if __name__ == "__main__":
         update_hostname(data, hostname)
     
     while True:
-        print "* Response %s: %s" % (datetime.now(), zabbix_proxy_send(update_time(data), url))
+        try:
+            response = zabbix_proxy_send(update_time(data), url)
+            print "* Response %s: %s" % (datetime.now(), response)
+        except Exception, e:
+            print "Error sending to proxy: %s" % e
+            # shift time
+            time.sleep(1)
         time.sleep(interval)
