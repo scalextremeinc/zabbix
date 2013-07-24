@@ -1300,7 +1300,7 @@ static void	process_active_checks(char *server, unsigned short port)
 			do{ /* simple try realization */
 				char *p, *q, *metric, *metric_result, *sec, *ns;
                 zbx_timespec_t ts, *ts_ptr;
-                
+                int nmetric, nline;
 
 				zabbix_log(LOG_LEVEL_WARNING, "executing collector: %s\n", active_metrics[i].collector.command);
 				if (SYSINFO_RET_FAIL == EXECUTE_STR(active_metrics[i].key, active_metrics[i].collector.command, 0, &result))
@@ -1310,6 +1310,7 @@ static void	process_active_checks(char *server, unsigned short port)
 				if (NULL == pvalue)
 					break;
 
+				nmetric = nline = 0;
 				for (p = *pvalue; p && *p; ) {
                     sec = NULL;
                     ns = NULL;
@@ -1317,6 +1318,8 @@ static void	process_active_checks(char *server, unsigned short port)
 					zbx_ltrim(p, "\n\r");
 					if (*p == '\0')
 						break;
+				
+					nline++;
 					metric = p;
 					if (NULL == (q = strchr(p, ':')))
 						continue;
@@ -1349,13 +1352,16 @@ static void	process_active_checks(char *server, unsigned short port)
                     zbx_ltrim(metric_result, "\r\t ");
                     zbx_rtrim(metric_result, "\r\t ");
                     
-					zabbix_log(LOG_LEVEL_WARNING, "metric=<%s> result=<%s> sec=<%s> ns=<%s>\n",
-                        metric, metric_result, sec, ns);
+					zabbix_log(LOG_LEVEL_DEBUG, "[%d] metric[%d]=<%s> result=<%s> sec=<%s> ns=<%s>\n",
+                        nline, ++nmetric, metric, metric_result, sec, ns);
 
-                    process_value(server, port, CONFIG_HOSTNAME, metric, metric_result,
+                    send_err = process_value(server, port, CONFIG_HOSTNAME, metric, metric_result,
                                   &active_metrics[i].lastlogsize, NULL, NULL, NULL, NULL, NULL, 0, ts_ptr);
+					if (send_err != SUCCEED)
+						zabbix_log(LOG_LEVEL_WARNING, "collector failed to send metric=<%s>\n", metric);
 
 				}
+				zabbix_log(LOG_LEVEL_DEBUG, "collector returned %d lines with %d usable metrics\n", nline, nmetric);
 				ret = SUCCEED;
 				break;
 			}
