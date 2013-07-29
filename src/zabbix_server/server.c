@@ -197,6 +197,8 @@ char* CONFIG_ZMQ_QUEUE_RECOVERY_DIR = NULL;
 int CONFIG_ZMQ_DAOC = 0;
 #endif
 
+int CONFIG_TIME_FIX = 1;
+
 /* mutex for node syncs */
 ZBX_MUTEX	node_sync_access;
 
@@ -414,6 +416,8 @@ static void	zbx_load_config()
         {"ZmqQueueDaoc",		&CONFIG_ZMQ_DAOC,		TYPE_INT,
 			PARM_OPT,	0,			1},
 #endif
+        {"TimeFix",		&CONFIG_TIME_FIX,		TYPE_INT,
+			PARM_OPT,	0,			1},
 		{NULL}
 	};
 

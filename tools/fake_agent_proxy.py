@@ -10,7 +10,8 @@ def zabbix_proxy_send(data, url='https://localhost/agents/data'):
         POST /agents/data
     """
     sxhost = data['data'][0]['host']
-    req = urllib2.Request(url, json.dumps(data), headers={'sxhost': sxhost})
+    req = urllib2.Request(url, json.dumps(data), headers={'sxhost': sxhost, 
+        'Content-Type': 'application/json'})
     rsp = urllib2.urlopen(req)
     return rsp.read()
 

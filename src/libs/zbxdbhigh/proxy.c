@@ -27,6 +27,8 @@
 #include "dbcache.h"
 #include "discovery.h"
 
+extern int CONFIG_TIME_FIX;
+
 typedef struct
 {
 	const char		*field;
@@ -1571,23 +1573,23 @@ int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
 	if (NULL == values)
 		values = zbx_malloc(values, VALUES_MAX * sizeof(AGENT_VALUE));
 
-    /* disable time fix to be able to get data buffered by router queue
-	if (SUCCEED == zbx_json_value_by_name_dyn(jp, ZBX_PROTO_TAG_CLOCK, &tmp, &tmp_alloc))
-	{
-		proxy_timediff.sec = ts.sec - atoi(tmp);
+    // make it possible to disable time fix to be able to get data buffered by router queue
+    if (CONFIG_TIME_FIX
+        && SUCCEED == zbx_json_value_by_name_dyn(jp, ZBX_PROTO_TAG_CLOCK, &tmp, &tmp_alloc))
+    {
+        proxy_timediff.sec = ts.sec - atoi(tmp);
 
-		if (SUCCEED == zbx_json_value_by_name_dyn(jp, ZBX_PROTO_TAG_NS, &tmp, &tmp_alloc))
-		{
-			proxy_timediff.ns = ts.ns - atoi(tmp);
+        if (SUCCEED == zbx_json_value_by_name_dyn(jp, ZBX_PROTO_TAG_NS, &tmp, &tmp_alloc))
+        {
+            proxy_timediff.ns = ts.ns - atoi(tmp);
 
-			if (proxy_timediff.ns < 0)
-			{
-				proxy_timediff.sec--;
-				proxy_timediff.ns += 1000000000;
-			}
-		}
-	}
-    */
+            if (proxy_timediff.ns < 0)
+            {
+                proxy_timediff.sec--;
+                proxy_timediff.ns += 1000000000;
+            }
+        }
+    }
     
     // fill time diff structure - used by the code which sends data to queue
     if (timediff != NULL) {
