@@ -384,6 +384,9 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
         
         // collector items
         if (NULL != row[4]) {
+            // skip item with bad collectorid
+            if (NULL == row[5])
+                continue;
             current_id = atol(row[4]);
             if (prev_id != current_id) {
                 if (close_item_json) {
@@ -393,7 +396,10 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
                     zbx_json_close(&json);
                     close_item_json = 0;
                 }
-                collector_mtime = atol(row[7]);
+                if (NULL != row[7])
+                    collector_mtime = atol(row[7]);
+                else
+                    collector_mtime = 0;
                 zbx_json_addobject(&json, NULL);
                 zbx_snprintf(params, MAX_STRING_LEN, "collector[%d-%d]", current_id, collector_mtime);
                 zbx_json_addstring(&json, ZBX_PROTO_TAG_KEY, params, ZBX_JSON_TYPE_STRING);
