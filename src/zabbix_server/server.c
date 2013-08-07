@@ -133,6 +133,7 @@ int	CONFIG_TRAPPER_TIMEOUT		= 300;
 
 int	CONFIG_HOUSEKEEPING_FREQUENCY	= 1;
 int	CONFIG_MAX_HOUSEKEEPER_DELETE	= 500;		/* applies for every separate field value */
+int CONFIG_HOUSEKEEPER_SINGLE_QUERY = 0;
 int	CONFIG_SENDER_FREQUENCY		= 30;
 int	CONFIG_HISTSYNCER_FORKS		= 4;
 int	CONFIG_HISTSYNCER_FREQUENCY	= 5;
@@ -417,6 +418,8 @@ static void	zbx_load_config()
 			PARM_OPT,	0,			1},
 #endif
         {"TimeFix",		&CONFIG_TIME_FIX,		TYPE_INT,
+			PARM_OPT,	0,			1},
+        {"HousekeeperSingleQuery",		&CONFIG_HOUSEKEEPER_SINGLE_QUERY,		TYPE_INT,
 			PARM_OPT,	0,			1},
 		{NULL}
 	};

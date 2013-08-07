@@ -4629,7 +4629,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     
     if (NULL != host && find_app_name(key, app_name, MAX_NAME_LEN) == 0) {
         result = DBselect("select applicationid from applications where hostid=" ZBX_FS_UI64 
-            " and name='%s'", host->hostid, app_name);
+            " and name='%s' limit 1", host->hostid, app_name);
         if (NULL != (row = DBfetch(result))) {
             ZBX_STR2UINT64(applicationid, row[0]);
             DBfree_result(result);

@@ -243,6 +243,26 @@ static int	delete_history(const char *table, zbx_uint64_t itemid, int keep_histo
 	return deleted;
 }
 
+static int	delete_history_by_item(const char *table, zbx_uint64_t itemid, int keep_history, int now)
+{
+	const char	*__function_name = "delete_history";
+	DB_RESULT       result;
+	DB_ROW          row;
+	int             min_clock, deleted;
+
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() table:'%s' itemid:" ZBX_FS_UI64 " keep_history:%d now:%d",
+		__function_name, table, itemid, keep_history, now);
+
+	min_clock = now - keep_history * SEC_PER_HOUR;
+
+	deleted = DBexecute("delete from %s where itemid=" ZBX_FS_UI64 " and clock<%d", table, itemid, min_clock);
+    //deleted = DBexecute("delete from %s where exists (select * from history where itemid=" ZBX_FS_UI64 " and clock<%d)", table, itemid, min_clock);
+
+	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%d", __function_name, deleted);
+
+	return deleted;
+}
+
 /******************************************************************************
  *                                                                            *
  * Function: housekeeping_history_and_trends                                  *
@@ -295,9 +315,49 @@ static int	housekeeping_history_and_trends(int now)
 	return deleted;
 }
 
+static int	housekeeping_history(int now)
+{
+	const char	*__function_name = "housekeeping_history";
+	zbx_uint64_t	itemid;
+	DB_RESULT       result;
+	DB_ROW          row;
+	int             deleted = 0;
+
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() now:%d", __function_name, now);
+
+    if (!CONFIG_HOUSEKEEPER_SINGLE_QUERY) {
+        result = DBselect(
+            "select i.itemid, f.functionid from items i "
+            "LEFT JOIN functions f ON (i.itemid=f.itemid), hosts h "
+            "where i.hostid=h.hostid and h.status in (%d, %d)",
+            HOST_STATUS_MONITORED, HOST_STATUS_NOT_MONITORED);
+        
+        while (NULL != (row = DBfetch(result)))
+        {
+            ZBX_STR2UINT64(itemid, row[0]);
+            if (NULL == row[1]) {
+                // items without triggers - keep 2h history
+                deleted += delete_history_by_item("history", itemid, 2, now);
+            } else {
+                // items with triggers - keep 24h history
+                deleted += delete_history_by_item("history", itemid, 24, now);
+            }
+        }
+        
+        DBfree_result(result);
+    } else {
+        deleted = DBexecute("delete from %s where clock<%d", "history", now - 24 * SEC_PER_HOUR);
+    }
+
+	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%d", __function_name, deleted);
+
+	return deleted;
+}
+
+
 void	main_housekeeper_loop()
 {
-	int	now, d_history_and_trends, d_cleanup, d_events, d_alerts, d_sessions;
+	int	now, d_history;
 
 	for (;;)
 	{
@@ -307,25 +367,26 @@ void	main_housekeeper_loop()
 		zbx_setproctitle("%s [connecting to the database]", get_process_type_string(process_type));
 
 		DBconnect(ZBX_DB_CONNECT_NORMAL);
+        
+        zbx_setproctitle("%s [removing old history]", get_process_type_string(process_type));
+		d_history = housekeeping_history(now);
 
-		zbx_setproctitle("%s [removing old history and trends]", get_process_type_string(process_type));
-		d_history_and_trends = housekeeping_history_and_trends(now);
+		//zbx_setproctitle("%s [removing old history and trends]", get_process_type_string(process_type));
+		//d_history_and_trends = housekeeping_history_and_trends(now);
 
-		zbx_setproctitle("%s [removing deleted items data]", get_process_type_string(process_type));
-		d_cleanup = housekeeping_cleanup(now);
+		//zbx_setproctitle("%s [removing deleted items data]", get_process_type_string(process_type));
+		//d_cleanup = housekeeping_cleanup(now);
 
-		zbx_setproctitle("%s [removing old events]", get_process_type_string(process_type));
-		d_events = housekeeping_events(now);
+		//zbx_setproctitle("%s [removing old events]", get_process_type_string(process_type));
+		//d_events = housekeeping_events(now);
 
-		zbx_setproctitle("%s [removing old alerts]", get_process_type_string(process_type));
-		d_alerts = housekeeping_alerts(now);
+		//zbx_setproctitle("%s [removing old alerts]", get_process_type_string(process_type));
+		//d_alerts = housekeeping_alerts(now);
 
-		zbx_setproctitle("%s [removing old sessions]", get_process_type_string(process_type));
-		d_sessions = housekeeping_sessions(now);
+		//zbx_setproctitle("%s [removing old sessions]", get_process_type_string(process_type));
+        //d_sessions = housekeeping_sessions(now);
 
-		zabbix_log(LOG_LEVEL_WARNING, "housekeeper deleted: %d records from history and trends,"
-				" %d records of deleted items, %d events, %d alerts, %d sessions",
-				d_history_and_trends, d_cleanup, d_events, d_alerts, d_sessions);
+		zabbix_log(LOG_LEVEL_WARNING, "housekeeper, deleted history: %d records", d_history);
 
 		DBclose();
 
