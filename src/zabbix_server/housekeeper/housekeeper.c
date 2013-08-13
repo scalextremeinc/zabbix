@@ -346,7 +346,22 @@ static int	housekeeping_history(int now)
         
         DBfree_result(result);
     } else {
-        deleted = DBexecute("delete from %s where clock<%d", "history", now - 24 * SEC_PER_HOUR);
+        // items without triggers - keep 2h history
+        deleted += DBexecute(
+            "delete from history where "
+            "itemid not in ("
+                "select i.itemid from items i, functions f, hosts h "
+                "where i.itemid=f.itemid and i.hostid=h.hostid and h.status in (%d, %d)) "
+            "and clock<%d",
+            HOST_STATUS_MONITORED, HOST_STATUS_NOT_MONITORED, now - 2 * SEC_PER_HOUR);
+        // items with triggers - keep 24h history
+        deleted += DBexecute(
+            "delete from history where "
+            "itemid in ("
+                "select i.itemid from items i, functions f, hosts h "
+                "where i.itemid=f.itemid and i.hostid=h.hostid and h.status in (%d, %d)) "
+            "and clock<%d",
+            HOST_STATUS_MONITORED, HOST_STATUS_NOT_MONITORED, now - 24 * SEC_PER_HOUR);
     }
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%d", __function_name, deleted);
