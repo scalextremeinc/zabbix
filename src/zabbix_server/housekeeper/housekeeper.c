@@ -402,8 +402,8 @@ void	main_housekeeper_loop()
 		//zbx_setproctitle("%s [removing old sessions]", get_process_type_string(process_type));
         //d_sessions = housekeeping_sessions(now);
 
-
-		zabbix_log(LOG_LEVEL_WARNING, "housekeeper, deleted history: %d records, time spent: %s", d_history, time(NULL) - now);
+        now = time(NULL) - now;
+		zabbix_log(LOG_LEVEL_WARNING, "housekeeper, deleted history: %d records, time spent: %d", d_history, now);
 
 		DBclose();
 
