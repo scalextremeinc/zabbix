@@ -256,7 +256,6 @@ static int	delete_history_by_item(const char *table, zbx_uint64_t itemid, int ke
 	min_clock = now - keep_history * SEC_PER_HOUR;
 
 	deleted = DBexecute("delete from %s where itemid=" ZBX_FS_UI64 " and clock<%d", table, itemid, min_clock);
-    //deleted = DBexecute("delete from %s where exists (select * from history where itemid=" ZBX_FS_UI64 " and clock<%d)", table, itemid, min_clock);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%d", __function_name, deleted);
 
@@ -326,6 +325,7 @@ static int	housekeeping_history(int now)
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s() now:%d", __function_name, now);
 
     if (!CONFIG_HOUSEKEEPER_SINGLE_QUERY) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "housekeeping iterative");
         result = DBselect(
             "select i.itemid, f.functionid from items i "
             "LEFT JOIN functions f ON (i.itemid=f.itemid), hosts h "
@@ -346,6 +346,7 @@ static int	housekeeping_history(int now)
         
         DBfree_result(result);
     } else {
+        zabbix_log(LOG_LEVEL_INFORMATION, "housekeeping single query");
         // items without triggers - keep 2h history
         deleted += DBexecute(
             "delete from history where "
@@ -372,7 +373,7 @@ static int	housekeeping_history(int now)
 
 void	main_housekeeper_loop()
 {
-	int	now, d_history;
+	int	now, d_history = 0;
 
 	for (;;)
 	{
