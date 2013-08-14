@@ -4716,3 +4716,17 @@ void DCrefresh_items_cache() {
     
     DBfree_result(item_result);
 }
+
+int DChas_triggers(zbx_uint64_t itemid) {
+    ZBX_DC_ITEM *item;
+    int triggers = 0;
+    
+    LOCK_CACHE;
+    item = zbx_hashset_search(&config->items, &itemid);
+    UNLOCK_CACHE;
+    
+    if (NULL != item && NULL != item->triggers)
+        triggers = 1;
+    
+    return triggers;
+}

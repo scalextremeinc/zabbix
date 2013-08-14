@@ -56,6 +56,7 @@ extern unsigned char	daemon_type;
 
 extern int		CONFIG_HISTSYNCER_FREQUENCY;
 extern int		CONFIG_NODE_NOHISTORY;
+extern int CONFIG_TRIGGERS_HISTORY;
 
 extern int		process_num;
 extern unsigned char	process_type;
@@ -1527,12 +1528,13 @@ static void	DCmass_add_history(ZBX_DC_HISTORY *history, int history_num)
  */
 #ifdef HAVE_MULTIROW_INSERT
 	tmp_offset = sql_offset;
-	zbx_strcpy_alloc(&sql, &sql_alloc, &sql_offset, "insert into history (itemid,clock,value,ns) values ");
+	zbx_strcpy_alloc(&sql, &sql_alloc, &sql_offset, "insert into history (itemid,clock,value,ns,hour) values ");
 #endif
 
 	for (i = 0; i < history_num; i++)
 	{
-		if (0 == history[i].keep_history)
+		if (0 == history[i].keep_history 
+        || (CONFIG_TRIGGERS_HISTORY && !DChas_triggers(history[i].itemid)))
 			continue;
 
 		if (ITEM_VALUE_TYPE_FLOAT != history[i].value_type)
@@ -1542,14 +1544,15 @@ static void	DCmass_add_history(ZBX_DC_HISTORY *history, int history_num)
 			continue;
 
 #ifndef HAVE_MULTIROW_INSERT
-		zbx_strcpy_alloc(&sql, &sql_alloc, &sql_offset, "insert into history (itemid,clock,value,ns) values ");
+		zbx_strcpy_alloc(&sql, &sql_alloc, &sql_offset, "insert into history (itemid,clock,value,ns,hour) values ");
 #endif
 		zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
-				"(" ZBX_FS_UI64 ",%d," ZBX_FS_DBL ",%d",
+				"(" ZBX_FS_UI64 ",%d," ZBX_FS_DBL ",%d,%d",
 				history[i].itemid,
 				history[i].clock,
 				history[i].value.dbl,
-				history[i].ns);
+				history[i].ns,
+                history[i].clock / SEC_PER_HOUR);
 		zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset, ")%s", row_dl);
 	}
 

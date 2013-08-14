@@ -199,6 +199,7 @@ int CONFIG_ZMQ_DAOC = 0;
 #endif
 
 int CONFIG_TIME_FIX = 1;
+int CONFIG_TRIGGERS_HISTORY = 0;
 
 /* mutex for node syncs */
 ZBX_MUTEX	node_sync_access;
@@ -420,6 +421,8 @@ static void	zbx_load_config()
         {"TimeFix",		&CONFIG_TIME_FIX,		TYPE_INT,
 			PARM_OPT,	0,			1},
         {"HousekeeperSingleQuery",		&CONFIG_HOUSEKEEPER_SINGLE_QUERY,		TYPE_INT,
+			PARM_OPT,	0,			1},
+        {"TriggersHisotry",		&CONFIG_TRIGGERS_HISTORY,		TYPE_INT,
 			PARM_OPT,	0,			1},
 		{NULL}
 	};
