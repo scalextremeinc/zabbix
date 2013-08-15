@@ -347,7 +347,7 @@ static int	housekeeping_history(int now)
         DBfree_result(result);
     } else {
         zabbix_log(LOG_LEVEL_INFORMATION, "housekeeping single query");
-        // items without triggers - keep 24h history
+        // delete items older than 24h
         deleted += DBexecute("delete from history where hour<%d",
             (now - 24 * SEC_PER_HOUR)/SEC_PER_HOUR);
     }
