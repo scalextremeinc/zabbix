@@ -314,18 +314,28 @@ static int	housekeeping_history_and_trends(int now)
 	return deleted;
 }
 
-static int	housekeeping_history(int now)
+static int housekeeping_history(int now)
 {
 	const char	*__function_name = "housekeeping_history";
-	zbx_uint64_t	itemid;
-	DB_RESULT       result;
-	DB_ROW          row;
-	int             deleted = 0;
+	zbx_uint64_t itemid;
+	DB_RESULT result;
+	DB_ROW row;
+	int deleted = 0;
+    int n = CONFIG_MAX_HOUSEKEEPER_DELETE;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s() now:%d", __function_name, now);
 
-    if (!CONFIG_HOUSEKEEPER_SINGLE_QUERY) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "housekeeping iterative");
+    if (CONFIG_HOUSEKEEPER_SINGLE_QUERY) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "Running housekeeper, mode: single query");
+        // delete items older than 24h
+        while (n == CONFIG_MAX_HOUSEKEEPER_DELETE) {
+            zabbix_log(LOG_LEVEL_INFORMATION, "housekeeper, single query delete");
+            n = DBexecute("delete from history where hour<%d limit %d",
+                (now - 24 * SEC_PER_HOUR)/SEC_PER_HOUR, CONFIG_MAX_HOUSEKEEPER_DELETE);
+            deleted += n;
+        }
+    } else {
+        zabbix_log(LOG_LEVEL_INFORMATION, "Running housekeeper, mode: iterative");
         result = DBselect(
             "select i.itemid, f.functionid from items i "
             "LEFT JOIN functions f ON (i.itemid=f.itemid), hosts h "
@@ -345,11 +355,6 @@ static int	housekeeping_history(int now)
         }
         
         DBfree_result(result);
-    } else {
-        zabbix_log(LOG_LEVEL_INFORMATION, "housekeeping single query");
-        // delete items older than 24h
-        deleted += DBexecute("delete from history where hour<%d",
-            (now - 24 * SEC_PER_HOUR)/SEC_PER_HOUR);
     }
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%d", __function_name, deleted);
