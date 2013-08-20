@@ -20,10 +20,11 @@
 #ifndef ZABBIX_HOUSEKEEPER_H
 #define ZABBIX_HOUSEKEEPER_H
 
-extern int	CONFIG_HOUSEKEEPING_FREQUENCY;
-extern int	CONFIG_MAX_HOUSEKEEPER_DELETE;
-extern int  CONFIG_HOUSEKEEPER_SINGLE_QUERY;
+extern int CONFIG_HOUSEKEEPING_FREQUENCY;
+extern int CONFIG_MAX_HOUSEKEEPER_DELETE;
+extern int CONFIG_HOUSEKEEPER_SINGLE_QUERY;
+extern int CONFIG_HOUSEKEEPER_SLEEP;
 
-void	main_housekeeper_loop();
+void main_housekeeper_loop();
 
 #endif

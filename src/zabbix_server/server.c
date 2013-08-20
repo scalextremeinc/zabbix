@@ -200,6 +200,7 @@ int CONFIG_ZMQ_DAOC = 0;
 
 int CONFIG_TIME_FIX = 1;
 int CONFIG_TRIGGERS_HISTORY = 0;
+int CONFIG_HOUSEKEEPER_SLEEP = 0;
 
 /* mutex for node syncs */
 ZBX_MUTEX	node_sync_access;
@@ -424,6 +425,9 @@ static void	zbx_load_config()
 			PARM_OPT,	0,			1},
         {"TriggersHisotry",		&CONFIG_TRIGGERS_HISTORY,		TYPE_INT,
 			PARM_OPT,	0,			1},
+        {"HousekeeperSleep",		&CONFIG_HOUSEKEEPER_SLEEP,		TYPE_INT,
+			PARM_OPT,	0,			60},
+            
 		{NULL}
 	};
 

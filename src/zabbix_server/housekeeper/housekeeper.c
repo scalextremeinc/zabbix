@@ -333,6 +333,8 @@ static int housekeeping_history(int now)
             n = DBexecute("delete from history where hour<%d limit %d",
                 (now - 24 * SEC_PER_HOUR)/SEC_PER_HOUR, CONFIG_MAX_HOUSEKEEPER_DELETE);
             deleted += n;
+            if (CONFIG_HOUSEKEEPER_SLEEP && n == CONFIG_MAX_HOUSEKEEPER_DELETE)
+                sleep(CONFIG_HOUSEKEEPER_SLEEP);
         }
     } else {
         zabbix_log(LOG_LEVEL_INFORMATION, "Running housekeeper, mode: iterative");
