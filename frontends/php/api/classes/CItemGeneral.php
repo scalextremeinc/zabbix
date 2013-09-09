@@ -246,7 +246,7 @@ abstract class CItemGeneral extends CZBXAPI {
 			if ($fullItem['type'] == ITEM_TYPE_AGGREGATE) {
 				$params = $itemKey->getParameters();
 
-				if (!str_in_array($itemKey->getKeyId(), array('grpmax', 'grpmin', 'grpsum', 'grpavg'))
+				if (!str_in_array($itemKey->getKeyId(), array('grpmax', 'grpmin', 'grpsum', 'grpavg', 'grpany'))
 						|| count($params) != 4
 						|| !str_in_array($params[2], array('last', 'min', 'max', 'avg', 'sum', 'count'))) {
 					self::exception(ZBX_API_ERROR_PARAMETERS,
@@ -262,9 +262,9 @@ abstract class CItemGeneral extends CZBXAPI {
 			}
 
 			// type of information
-			if ($fullItem['type'] == ITEM_TYPE_AGGREGATE && $fullItem['value_type'] != ITEM_VALUE_TYPE_FLOAT) {
+			/*if ($fullItem['type'] == ITEM_TYPE_AGGREGATE && $fullItem['value_type'] != ITEM_VALUE_TYPE_FLOAT) {
 				self::exception(ZBX_API_ERROR_PARAMETERS, _('Value type must be Float for aggregate items.'));
-			}
+			}*/
 
 			if ($fullItem['value_type'] != ITEM_VALUE_TYPE_LOG && str_in_array($itemKey->getKeyId(), array('log', 'logrt', 'eventlog'))) {
 				self::exception(ZBX_API_ERROR_PARAMETERS, _('Type of information must be Log for log key.'));
