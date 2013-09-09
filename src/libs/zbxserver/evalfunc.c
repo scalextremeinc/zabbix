@@ -1829,6 +1829,181 @@ clean:
 	return res;
 }
 
+/*
+ *
+ * This helper function is also in src/zabbix_server/poller/checks_aggregate.c
+ * We should merge both once we figured out where to put common things for src/libs/zbxserver and src/zabbix_server
+ *
+ */
+static void	aggregate_get_items(zbx_uint64_t **ids, int *ids_alloc, int *ids_num, const char *groups,
+		const char *itemkey)
+{
+	char		*group, *esc;
+	DB_RESULT	result;
+	DB_ROW		row;
+	zbx_uint64_t	itemid;
+	char		*sql = NULL;
+	size_t		sql_alloc = ZBX_KIBIBYTE, sql_offset = 0;
+	int		num, n;
+
+	sql = zbx_malloc(sql, sql_alloc);
+
+	esc = DBdyn_escape_string(itemkey);
+
+	zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
+			"select i.itemid"
+			" from items i,hosts_groups hg,hosts h,groups g"
+			" where hg.groupid=g.groupid"
+				" and i.hostid=h.hostid"
+				" and hg.hostid=h.hostid"
+				" and i.key_='%s'"
+				" and i.status=%d"
+				" and h.status=%d",
+			esc,
+			ITEM_STATUS_ACTIVE,
+			HOST_STATUS_MONITORED);
+
+	zbx_free(esc);
+
+	num = num_param(groups);
+
+	zbx_strcpy_alloc(&sql, &sql_alloc, &sql_offset, " and g.name in (");
+
+	for (n = 1; n <= num; n++)
+	{
+		if (NULL == (group = get_param_dyn(groups, n)))
+			continue;
+
+		esc = DBdyn_escape_string(group);
+
+		zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset, "'%s'", esc);
+
+		if (n != num)
+			zbx_chrcpy_alloc(&sql, &sql_alloc, &sql_offset, ',');
+
+		zbx_free(esc);
+		zbx_free(group);
+	}
+
+	zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset, ")" DB_NODE, DBnode_local("h.hostid"));
+
+	result = DBselect("%s", sql);
+
+	zbx_free(sql);
+
+	while (NULL != (row = DBfetch(result)))
+	{
+		ZBX_STR2UINT64(itemid, row[0]);
+		uint64_array_add(ids, ids_alloc, ids_num, itemid, 64);
+	}
+	DBfree_result(result);
+}
+
+
+static int	evaluate_GRPANY(char *value, DB_ITEM *item, const char *function, const char *parameters, time_t now)
+{
+	const char	*__function_name = "evaluate_GRPANY";
+	int		nparams, arg1, flag, h_num, res = FAIL;
+
+    char		key[8], params[MAX_STRING_LEN],
+                groups[MAX_STRING_LEN], itemkey[MAX_STRING_LEN], func[8], funcp[32];
+
+	char		*sql = NULL;
+	size_t		sql_alloc = 1024, sql_offset = 0, offset;
+	zbx_uint64_t	*ids = NULL;
+	int		ids_alloc = 0, ids_num = 0;
+
+	DB_RESULT	result;
+	DB_ROW		row;
+
+    char tmp_value[MAX_BUFFER_LEN];
+	DB_ITEM		tmp_item;
+
+    zabbix_log(LOG_LEVEL_INFORMATION, "In %s() grpany key:'%s'", __function_name, item->key);
+
+
+    if (2 != parse_command(item->key, key, sizeof(key), params, sizeof(params)))
+    {
+        zabbix_log(LOG_LEVEL_WARNING, "grpany failed to parse command");
+        goto clean;
+    }
+
+    if (num_param(params) != 4)
+    {
+        zabbix_log(LOG_LEVEL_WARNING, "grpany needs 4 params");
+        goto clean;
+    }
+
+    if (0 != get_param(params, 1, groups, sizeof(groups)))
+    {
+        zabbix_log(LOG_LEVEL_WARNING, "grpany failed to get groups");
+        goto clean;
+    }
+
+    if (0 != get_param(params, 2, itemkey, sizeof(itemkey)))
+    {
+        zabbix_log(LOG_LEVEL_WARNING, "grpany failed to get itemkey");
+        goto clean;
+    }
+
+    if (0 != get_param(params, 3, func, sizeof(func)))
+    {
+        zabbix_log(LOG_LEVEL_WARNING, "grpany failed to get func");
+        goto clean;
+    }
+
+    if (0 != get_param(params, 4, funcp, sizeof(funcp)))
+    {
+        zabbix_log(LOG_LEVEL_WARNING, "grpany failed to get funcp");
+        goto clean;
+    }
+
+
+    zabbix_log(LOG_LEVEL_DEBUG, "In %s() grpany - aggregate_get_items", __function_name);
+
+    aggregate_get_items(&ids, &ids_alloc, &ids_num, groups, itemkey);
+
+    zabbix_log(LOG_LEVEL_DEBUG, "In %s() grpany - fetching items", __function_name);
+
+	sql = zbx_malloc(sql, sql_alloc);
+
+	zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
+			"select %s,h.status"
+			" from %s"
+			" where i.hostid=h.hostid"
+				" and",
+			ZBX_SQL_ITEM_FIELDS, ZBX_SQL_ITEM_TABLES);
+
+    DBadd_condition_alloc(&sql, &sql_alloc, &sql_offset, "i.itemid", ids, ids_num);
+
+    zabbix_log(LOG_LEVEL_DEBUG, "In %s() grpany - executing sql", __function_name);
+    result = DBselect("%s", sql);
+	zbx_free(sql);
+
+    offset = zbx_strlcpy(value, "grpany", MAX_BUFFER_LEN);
+
+    while (NULL != (row = DBfetch(result)))
+    {
+        zabbix_log(LOG_LEVEL_DEBUG, "In %s() grpany - eval sub values start", __function_name);
+	    DBget_item_from_db(&tmp_item, row);
+        evaluate_function(tmp_value, &tmp_item, function, parameters, now);
+
+        offset += zbx_snprintf(value + offset, MAX_BUFFER_LEN - offset, "|%s", tmp_value);
+
+        zabbix_log(LOG_LEVEL_DEBUG, "In %s() grpany - eval sub values end - value:%s", __function_name, tmp_value);
+    }
+
+
+    DBfree_result(result);
+    zabbix_log(LOG_LEVEL_INFORMATION, "In %s() grpany done - value:%s", __function_name, value);
+    res = SUCCEED;
+
+clean:
+	zabbix_log(LOG_LEVEL_DEBUG, "End of %s():%s", __function_name, zbx_result_string(res));
+
+    return res;
+}
+
 /******************************************************************************
  *                                                                            *
  * Function: evaluate_function                                                *
@@ -1852,12 +2027,16 @@ int	evaluate_function(char *value, DB_ITEM *item, const char *function, const ch
 	int		ret;
 	struct tm	*tm = NULL;
 
-	zabbix_log(LOG_LEVEL_DEBUG, "In %s() function:'%s.%s(%s)'", __function_name,
-			zbx_host_key_string_by_item(item), function, parameter);
-
 	*value = '\0';
 
-	if (0 == strcmp(function, "last") || 0 == strcmp(function, "prev"))
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() function:'%s.%s(%s)' value: %s", __function_name,
+			zbx_host_key_string_by_item(item), function, parameter, value);
+
+    if (0 == strncmp(item->key, "grpany", 6))
+    {
+		ret = evaluate_GRPANY(value, item, function, parameter, now);
+    }
+	else if (0 == strcmp(function, "last") || 0 == strcmp(function, "prev"))
 	{
 		ret = evaluate_LAST(value, item, function, parameter, now);
 	}

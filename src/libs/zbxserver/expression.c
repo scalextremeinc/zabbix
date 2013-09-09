@@ -2865,6 +2865,9 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
 	zbx_uint64_t	functionid;
 	zbx_func_t	*func;
 
+    char *grpany_p;
+    int   grpany_offset;
+
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s() ifuncs_num:%d tr_num:%d",
 			__function_name, ifuncs->values_num, triggers->values_num);
 
@@ -2923,7 +2926,55 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
 				break;
 			}
 
-			zbx_strcpy_alloc(&out, &out_alloc, &out_offset, func->value);
+            if (0 == strncmp(func->value, "grpany", 6)) 
+            {
+                //grpany|1.34|34.3 - multiple values - multiple hosts
+                //grpany|3.2 - single value - single host
+                //grpany - no values - no host
+
+                if (0 != strncmp(func->value, "grpany|", 7))
+                {
+                    tr->new_error = zbx_strdup(tr->new_error, "No value for grpany. Probably no host in the group");
+                    tr->new_value = TRIGGER_VALUE_UNKNOWN;
+				    break;
+                }
+
+                grpany_p      = func->value+7;
+                grpany_offset = 0;
+
+                while (*grpany_p) {
+                    if (*grpany_p == '|') {
+                        if (grpany_offset > 0) {
+                            *grpany_p = '\0';
+                            zbx_strcpy_alloc(&out, &out_alloc, &out_offset, grpany_p-grpany_offset);
+                            zbx_strcpy_alloc(&out, &out_alloc, &out_offset, br);
+
+                            /*
+                             * There must be a value following as we are seeing *grpany_p is '|' 
+                             * So here we put an OR operator here
+                             */
+
+                            zbx_strcpy_alloc(&out, &out_alloc, &out_offset, "|");
+
+                            grpany_offset = 0;
+                        }
+                    } else {
+                        ++grpany_offset;
+                    }
+                    ++grpany_p;
+                }
+                
+                if (grpany_offset > 0) {
+                    zbx_strcpy_alloc(&out, &out_alloc, &out_offset, grpany_p-grpany_offset);
+                }
+
+                zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpany expression result '%s' + br", __function_name, out);
+
+            }
+            else 
+            {
+			    zbx_strcpy_alloc(&out, &out_alloc, &out_offset, func->value);
+            }
 		}
 
 		if (NULL == tr->new_error)

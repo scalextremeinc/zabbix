@@ -26,6 +26,7 @@
 #define ZBX_GRP_FUNC_AVG	1
 #define ZBX_GRP_FUNC_MAX	2
 #define ZBX_GRP_FUNC_SUM	3
+#define ZBX_GRP_FUNC_ANY    4
 
 static void	evaluate_one(double *result, int *num, int grp_func, const char *value, unsigned char value_type)
 {
@@ -169,7 +170,11 @@ static int	evaluate_aggregate(AGENT_RESULT *res, const char *grpfunc, const char
 	int		item_func, grp_func;
 	int		ret = FAIL;
 
-	zabbix_log(LOG_LEVEL_DEBUG, "In %s() grpfunc:'%s' groups:'%s' itemkey:'%s' function:'%s(%s)'",
+    char    *grpany_str;
+	double	value_float;
+    int     is_first_grpany = 1;
+
+	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() grpfunc:'%s' groups:'%s' itemkey:'%s' function:'%s(%s)'",
 			__function_name, grpfunc, groups, itemkey, itemfunc, param);
 
 	if (0 == strcmp(grpfunc, "grpmin"))
@@ -180,6 +185,21 @@ static int	evaluate_aggregate(AGENT_RESULT *res, const char *grpfunc, const char
 		grp_func = ZBX_GRP_FUNC_MAX;
 	else if (0 == strcmp(grpfunc, "grpsum"))
 		grp_func = ZBX_GRP_FUNC_SUM;
+	else if (0 == strcmp(grpfunc, "grpany"))
+    {
+        /*
+         *
+         *
+         * disable the grpany writting
+         * We do not need to duplicate the values
+         * As we changed the evalfunc and expression 
+         * to expand the group and eval the trigger value from history table directly
+         *
+         */
+		grp_func = ZBX_GRP_FUNC_ANY;
+        ret = SUCCEED;
+        goto clean;
+    }
 	else
 		goto clean;
 
@@ -209,6 +229,15 @@ static int	evaluate_aggregate(AGENT_RESULT *res, const char *grpfunc, const char
 		goto clean;
 	}
 
+    if (ZBX_GRP_FUNC_ANY == grp_func) 
+    {
+        /*
+         * [x,y,z] where x is float(20, 4), so a float string will be 25 max length + 1 dot = 26
+         * and 2 chars for [ and ]
+         */
+	    grpany_str = zbx_malloc(grpany_str, 26*ids_num+2+1);
+        zbx_strlcpy(grpany_str, "[", MAX_STRING_LEN);
+    }
 	sql = zbx_malloc(sql, sql_alloc);
 
 	if (ZBX_DB_GET_HIST_VALUE == item_func)
@@ -226,9 +255,25 @@ static int	evaluate_aggregate(AGENT_RESULT *res, const char *grpfunc, const char
 
 		while (NULL != (row = DBfetch(result)))
 		{
-			value_type = (unsigned char)atoi(row[0]);
+            if (ZBX_GRP_FUNC_ANY == grp_func) 
+            {
+                if (!is_first_grpany)
+                {
+                    zbx_strlcat(grpany_str, ",", MAX_STRING_LEN);
+                }
+                else
+                {
+                    is_first_grpany = 0;
+                }
+                ++num;
+                zbx_strlcat(grpany_str, row[1], MAX_STRING_LEN);
+            }
+            else
+            {
+                value_type = (unsigned char)atoi(row[0]);
 
-			evaluate_one(&d, &num, grp_func, row[1], value_type);
+                evaluate_one(&d, &num, grp_func, row[1], value_type);
+            }
 		}
 		DBfree_result(result);
 	}
@@ -263,8 +308,27 @@ static int	evaluate_aggregate(AGENT_RESULT *res, const char *grpfunc, const char
 
 			h_value = DBget_history(itemid, value_type, item_func, clock_from, 0, NULL, NULL, 0);
 
-			if (NULL != h_value[0])
-				evaluate_one(&d, &num, grp_func, h_value[0], value_type);
+			if (NULL != h_value[0]) {
+
+                if (ZBX_GRP_FUNC_ANY == grp_func) 
+                {
+
+                    if (!is_first_grpany)
+                    {
+                        zbx_strlcat(grpany_str, ",", MAX_STRING_LEN);
+                    }
+                    else
+                    {
+                        is_first_grpany = 0;
+                    }
+                    zbx_strlcat(grpany_str, h_value[0], MAX_STRING_LEN);
+                    ++num;
+                }
+                else
+                {
+				    evaluate_one(&d, &num, grp_func, h_value[0], value_type);
+                }
+            }
 			DBfree_history(h_value);
 		}
 		DBfree_result(result);
@@ -276,12 +340,23 @@ static int	evaluate_aggregate(AGENT_RESULT *res, const char *grpfunc, const char
 		goto clean;
 	}
 
-	if (ZBX_GRP_FUNC_AVG == grp_func)
-		d = d / num;
 
-	SET_DBL_RESULT(res, d);
+    if (ZBX_GRP_FUNC_ANY == grp_func) 
+    {
+        zbx_strlcat(grpany_str, "]", MAX_STRING_LEN);
+        SET_TEXT_RESULT(res, grpany_str);
+	    zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpfunc grpany result:%s", __function_name, grpany_str);
+    }
+    else
+    {
+        if (ZBX_GRP_FUNC_AVG == grp_func)
+            d = d / num;
 
-	zabbix_log(LOG_LEVEL_DEBUG, "%s() result:" ZBX_FS_DBL, __function_name, d);
+        SET_DBL_RESULT(res, d);
+	    zabbix_log(LOG_LEVEL_DEBUG, "%s() result:" ZBX_FS_DBL, __function_name, d);
+    }
+
+
 
 	ret = SUCCEED;
 clean:
