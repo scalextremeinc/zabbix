@@ -196,6 +196,9 @@ static int	evaluate_aggregate(AGENT_RESULT *res, const char *grpfunc, const char
          * to expand the group and eval the trigger value from history table directly
          *
          */
+
+        SET_DBL_RESULT(res, 1);
+
 		grp_func = ZBX_GRP_FUNC_ANY;
         ret = SUCCEED;
         goto clean;
