@@ -1903,7 +1903,7 @@ static void	aggregate_get_items(zbx_uint64_t **ids, int *ids_alloc, int *ids_num
 static int	evaluate_GRPANY(char *value, DB_ITEM *item, const char *function, const char *parameters, time_t now)
 {
 	const char	*__function_name = "evaluate_GRPANY";
-	int		nparams, arg1, flag, h_num, res = FAIL;
+	int		nparams, arg1, flag, h_num, res = FAIL, sub_res;
 
     char		key[8], params[MAX_STRING_LEN],
                 groups[MAX_STRING_LEN], itemkey[MAX_STRING_LEN], func[8], funcp[32];
@@ -1986,7 +1986,14 @@ static int	evaluate_GRPANY(char *value, DB_ITEM *item, const char *function, con
     {
         zabbix_log(LOG_LEVEL_DEBUG, "In %s() grpany - eval sub values start", __function_name);
 	    DBget_item_from_db(&tmp_item, row);
-        evaluate_function(tmp_value, &tmp_item, function, parameters, now);
+
+        sub_res = evaluate_function(tmp_value, &tmp_item, function, parameters, now);
+
+        if (FAIL == sub_res)
+        {
+            zabbix_log(LOG_LEVEL_INFORMATION, "In %s() grpany - eval sub values fail", __function_name);
+            continue;
+        }
 
         offset += zbx_snprintf(value + offset, MAX_BUFFER_LEN - offset, "|%s", tmp_value);
 

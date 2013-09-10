@@ -260,4 +260,6 @@ void	DCrequeue_proxy(zbx_uint64_t hostid, unsigned char update_nextcheck);
 
 void	DCget_user_macro(zbx_uint64_t *hostids, int host_num, const char *macro, char **replace_to);
 
+void DCadd_historyitems(zbx_uint64_t itemid);
+
 #endif

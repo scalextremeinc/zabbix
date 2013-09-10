@@ -320,6 +320,13 @@ ZBX_DC_CONFIG_TABLE;
 
 typedef struct
 {
+    zbx_uint64_t	itemid;
+    time_t time; /* last time it being touched */
+}
+ZBX_DC_HISTORY_ITEM;
+
+typedef struct
+{
 	zbx_hashset_t		items;
 	zbx_hashset_t		items_hk;		/* hostid, key */
 	zbx_hashset_t		snmpitems;
@@ -350,11 +357,13 @@ typedef struct
 	zbx_hashset_t		interface_snmpaddrs;	/* addr, interfaceids for SNMP interfaces */
 	zbx_hashset_t		interface_snmpitems;	/* interfaceid, itemids for SNMP trap items */
     zbx_hashset_t		auto_create;
+    zbx_hashset_t		historyitems;
 	zbx_binary_heap_t	queues[ZBX_POLLER_TYPE_COUNT];
 	zbx_binary_heap_t	pqueue;
 	ZBX_DC_CONFIG_TABLE	*config;
 }
 ZBX_DC_CONFIG;
+
 
 static ZBX_DC_CONFIG	*config = NULL;
 static ZBX_MUTEX	config_lock;
@@ -705,6 +714,28 @@ static void DCsync_autocreate(DB_RESULT result) {
         zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Sync autocreate: %s", row[0]);
         zbx_hashset_insert(&config->auto_create, row[0], strlen(row[0]));
     }
+}
+
+static void DCsync_historyitems()
+{
+
+    ZBX_DC_HISTORY_ITEM *item;
+    zbx_hashset_iter_t	iter;
+    time_t			now;
+
+    now = time(NULL);
+
+    zbx_hashset_iter_reset(&config->historyitems, &iter);
+
+    while (NULL != (item = zbx_hashset_iter_next(&iter)))
+    {
+        if ( (now - item->time) > 600 )
+        {
+            zabbix_log(LOG_LEVEL_INFORMATION, "grpany DCsync_historyitems remove item %d", item->itemid);
+            zbx_hashset_iter_remove(&iter);
+        }
+    }
+
 }
 
 static void	DCsync_items(DB_RESULT result)
@@ -2435,6 +2466,7 @@ void	DCsync_configuration()
 	DCsync_hmacros(hmacro_result);
 	DCsync_interfaces(if_result);	/* resolves macros for interface_snmpaddrs, must be after DCsync_hmacros() */
     DCsync_autocreate(autocreate_result);
+    DCsync_historyitems();
 	ssec = zbx_time() - sec;
 
 	strpool = zbx_strpool_info();
@@ -2851,6 +2883,7 @@ void	init_configuration_cache()
 	CREATE_HASHSET(config->hmacros);
 	CREATE_HASHSET(config->interfaces);
 	CREATE_HASHSET(config->interface_snmpitems);
+	CREATE_HASHSET(config->historyitems);
 
 	CREATE_HASHSET_EXT(config->items_hk, __config_item_hk_hash, __config_item_hk_compare);
 	CREATE_HASHSET_EXT(config->hosts_ph, __config_host_ph_hash, __config_host_ph_compare);
@@ -4759,16 +4792,31 @@ void DCrefresh_items_cache() {
     DBfree_result(item_result);
 }
 
+void DCadd_historyitems(zbx_uint64_t itemid)
+{
+    zabbix_log(LOG_LEVEL_INFORMATION, "DCadd_historyitems grpany %d", itemid);
+    int                 found;
+    ZBX_DC_HISTORY_ITEM *item;
+    time_t              now;
+
+    item = DCfind_id(&config->historyitems, itemid, sizeof(ZBX_DC_HISTORY_ITEM), &found);
+    now = time(NULL);
+    item->time = now;
+}
+
 int DChas_triggers(zbx_uint64_t itemid) {
     ZBX_DC_ITEM *item;
     int triggers = 0;
     
     LOCK_CACHE;
+
     item = zbx_hashset_search(&config->items, &itemid);
-    UNLOCK_CACHE;
     
     if (NULL != item && NULL != item->triggers)
         triggers = 1;
-    
+	else if (NULL != zbx_hashset_search(&config->historyitems, &itemid))
+        triggers = 1;
+
+    UNLOCK_CACHE;
     return triggers;
 }
