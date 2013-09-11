@@ -2968,7 +2968,6 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
                     zbx_strcpy_alloc(&out, &out_alloc, &out_offset, grpany_p-grpany_offset);
                 }
 
-                zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpany expression result '%s' + br", __function_name, out);
 
             }
             else 
@@ -2979,12 +2978,19 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
 
 		if (NULL == tr->new_error)
 		{
+
 			zbx_strcpy_alloc(&out, &out_alloc, &out_offset, br);
 
 			zabbix_log(LOG_LEVEL_DEBUG, "%s() expression[%d]:'%s' => '%s'",
 					__function_name, i, tr->expression, out);
 
 			tr->expression = zbx_strdup(tr->expression, out);
+
+            if (0 == strncmp(func->value, "grpany", 6)) 
+            {
+                zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpany expression result '%s'", __function_name, out);
+            }
+
 		}
 	}
 
