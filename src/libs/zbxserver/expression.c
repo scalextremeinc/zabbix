@@ -2867,6 +2867,8 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
 
     char *grpany_p;
     int   grpany_offset;
+    char *next_op1 = NULL, *next_op2;
+    char current_op;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s() ifuncs_num:%d tr_num:%d",
 			__function_name, ifuncs->values_num, triggers->values_num);
@@ -2882,10 +2884,16 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
 
 		out_offset = 0;
 
+        next_op1 = NULL;
+
 		for (br = tr->expression, bl = strchr(tr->expression, '{'); NULL != bl; bl = strchr(bl, '{'))
 		{
 			*bl = '\0';
-			zbx_strcpy_alloc(&out, &out_alloc, &out_offset, br);
+            if (NULL != next_op1) {
+                br = next_op1;
+            }
+            zbx_strcpy_alloc(&out, &out_alloc, &out_offset, br);
+
 			*bl = '{';
 
 			if (NULL == (br = strchr(bl, '}')))
@@ -2942,12 +2950,40 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
                 grpany_p      = func->value+7;
                 grpany_offset = 0;
 
+                zbx_strcpy_alloc(&out, &out_alloc, &out_offset, "(");
+
+                next_op1 = strchr(br, '&');
+                if (NULL == next_op1) {
+                    next_op1 = strchr(br, '|');
+                } else {
+                    next_op2 = strchr(br, '|');
+                    if (NULL != next_op2 && next_op2 < next_op1) {
+                        next_op1 = next_op2;
+                    }
+                }
+
+
                 while (*grpany_p) {
                     if (*grpany_p == '|') {
                         if (grpany_offset > 0) {
                             *grpany_p = '\0';
+
+                            //zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpany expression before current '%s'", __function_name, out);
+
                             zbx_strcpy_alloc(&out, &out_alloc, &out_offset, grpany_p-grpany_offset);
+
+                            //zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpany expression br '%s'", __function_name, br);
+                            if (NULL != next_op1) {
+                                current_op = *next_op1;
+                                *next_op1  = '\0';
+                            }
                             zbx_strcpy_alloc(&out, &out_alloc, &out_offset, br);
+
+                            if (NULL != next_op1) {
+                                *next_op1  = current_op;
+                            }
+
+                            //zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpany expression after current '%s'", __function_name, out);
 
                             /*
                              * There must be a value following as we are seeing *grpany_p is '|' 
@@ -2963,10 +2999,22 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
                     }
                     ++grpany_p;
                 }
-                
+
                 if (grpany_offset > 0) {
                     zbx_strcpy_alloc(&out, &out_alloc, &out_offset, grpany_p-grpany_offset);
+                    if (NULL != next_op1) {
+                        current_op = *next_op1;
+                        *next_op1  = '\0';
+                    }
+
+                    zbx_strcpy_alloc(&out, &out_alloc, &out_offset, br);
+
+                    if (NULL != next_op1) {
+                        *next_op1  = current_op;
+                    }
                 }
+
+                zbx_strcpy_alloc(&out, &out_alloc, &out_offset, ")");
 
 
             }
@@ -2979,17 +3027,19 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
 		if (NULL == tr->new_error)
 		{
 
-			zbx_strcpy_alloc(&out, &out_alloc, &out_offset, br);
+            if (0 == strncmp(func->value, "grpany", 6)) 
+            {
+                zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpany expression result '%s'", __function_name, out);
+            } 
+            else
+            {
+			    zbx_strcpy_alloc(&out, &out_alloc, &out_offset, br);
+            }
 
 			zabbix_log(LOG_LEVEL_DEBUG, "%s() expression[%d]:'%s' => '%s'",
 					__function_name, i, tr->expression, out);
 
 			tr->expression = zbx_strdup(tr->expression, out);
-
-            if (0 == strncmp(func->value, "grpany", 6)) 
-            {
-                zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpany expression result '%s'", __function_name, out);
-            }
 
 		}
 	}
