@@ -3020,6 +3020,7 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
             }
             else 
             {
+                next_op1 = NULL;
 			    zbx_strcpy_alloc(&out, &out_alloc, &out_offset, func->value);
             }
 		}
