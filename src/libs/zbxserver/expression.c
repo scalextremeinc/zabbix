@@ -2869,6 +2869,7 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
     int   grpany_offset;
     char *next_op1 = NULL, *next_op2;
     char current_op;
+    int  has_grpany = 0;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s() ifuncs_num:%d tr_num:%d",
 			__function_name, ifuncs->values_num, triggers->values_num);
@@ -2936,6 +2937,9 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
 
             if (0 == strncmp(func->value, "grpany", 6)) 
             {
+
+                has_grpany = 1;
+
                 //grpany|1.34|34.3 - multiple values - multiple hosts
                 //grpany|3.2 - single value - single host
                 //grpany - no values - no host
@@ -3028,13 +3032,16 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
 		if (NULL == tr->new_error)
 		{
 
-            if (0 == strncmp(func->value, "grpany", 6)) 
-            {
-                zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpany expression result '%s'", __function_name, out);
-            } 
-            else
+            //if the last one is not grpany, we need to append the last part into the expression
+            if (0 != strncmp(func->value, "grpany", 6)) 
             {
 			    zbx_strcpy_alloc(&out, &out_alloc, &out_offset, br);
+            }
+
+            //if there was a grpany found, we log it
+            if (has_grpany)
+            {
+                zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpany expression result '%s'", __function_name, out);
             }
 
 			zabbix_log(LOG_LEVEL_DEBUG, "%s() expression[%d]:'%s' => '%s'",
