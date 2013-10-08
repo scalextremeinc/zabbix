@@ -860,16 +860,14 @@ void DCmass_flush_trends() {
 #endif
 
     // trends write to zabbix sql can be disabled in config
-    if (!CONFIG_TRENDS_SQL_WRITE) {
-        return;
+    if (CONFIG_TRENDS_SQL_WRITE) {
+        DBbegin();
+        
+        while (0 < trends_num)
+            DCflush_trends(trends, &trends_num, 1);
+        
+        DBcommit();
     }
-    
-    DBbegin();
-    
-    while (0 < trends_num)
-		DCflush_trends(trends, &trends_num, 1);
-    
-    DBcommit();
         
     zbx_free(trends);
     
