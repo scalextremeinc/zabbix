@@ -201,6 +201,7 @@ int CONFIG_ZMQ_DAOC = 0;
 int CONFIG_TIME_FIX = 1;
 int CONFIG_TRIGGERS_HISTORY = 0;
 int CONFIG_HOUSEKEEPER_SLEEP = 0;
+int CONFIG_TRENDS_SQL_WRITE = 1;
 
 /* mutex for node syncs */
 ZBX_MUTEX	node_sync_access;
@@ -419,15 +420,21 @@ static void	zbx_load_config()
         {"ZmqQueueDaoc",		&CONFIG_ZMQ_DAOC,		TYPE_INT,
 			PARM_OPT,	0,			1},
 #endif
+        // whether zabbix timefix is enabled or not
         {"TimeFix",		&CONFIG_TIME_FIX,		TYPE_INT,
 			PARM_OPT,	0,			1},
+        // should housekeepr use single query
         {"HousekeeperSingleQuery",		&CONFIG_HOUSEKEEPER_SINGLE_QUERY,		TYPE_INT,
 			PARM_OPT,	0,			1},
+        // store history only for items used by triggers
         {"TriggersHisotry",		&CONFIG_TRIGGERS_HISTORY,		TYPE_INT,
 			PARM_OPT,	0,			1},
+        // how long house keeper should sleep between batches it processes
         {"HousekeeperSleep",		&CONFIG_HOUSEKEEPER_SLEEP,		TYPE_INT,
 			PARM_OPT,	0,			60},
-            
+        // whether to write trends to zabbix sql or not
+        {"TrendsSqlWrite",		&CONFIG_TRENDS_SQL_WRITE,		TYPE_INT,
+			PARM_OPT,	0,			1},    
 		{NULL}
 	};
 

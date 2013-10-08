@@ -57,6 +57,7 @@ extern unsigned char	daemon_type;
 extern int		CONFIG_HISTSYNCER_FREQUENCY;
 extern int		CONFIG_NODE_NOHISTORY;
 extern int CONFIG_TRIGGERS_HISTORY;
+extern int CONFIG_TRENDS_SQL_WRITE;
 
 extern int		process_num;
 extern unsigned char	process_type;
@@ -857,6 +858,11 @@ void DCmass_flush_trends() {
             ZBX_FS_DBL " seconds", process_type, process_num, sec2);
     }
 #endif
+
+    // trends write to zabbix sql can be disabled in config
+    if (!CONFIG_TRENDS_SQL_WRITE) {
+        return;
+    }
     
     DBbegin();
     
