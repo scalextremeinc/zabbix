@@ -3029,7 +3029,7 @@ static void	DCsync_all()
 	zabbix_log(LOG_LEVEL_DEBUG, "In DCsync_all()");
 
 	DCsync_history(ZBX_SYNC_FULL);
-	if (0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER))
+	if (CONFIG_TRENDS_SQL_WRITE && 0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER))
 		DCsync_trends();
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of DCsync_all()");
