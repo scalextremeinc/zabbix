@@ -355,7 +355,7 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
     // order by collector id because we merge items with the same collector id
     zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset, " order by i.collectorid");
     
-    zabbix_log(LOG_LEVEL_INFORMATION, "SEND ACTIVE CHECKS: %s", sql);
+    //zabbix_log(LOG_LEVEL_INFORMATION, "SEND ACTIVE CHECKS: %s", sql);
 
 	zbx_free(name_esc);
 

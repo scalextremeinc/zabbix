@@ -28,6 +28,7 @@
 #define ZBX_IPC_HISTORY_ID	'h'
 #define ZBX_IPC_HISTORY_TEXT_ID	'x'
 #define ZBX_IPC_TREND_ID	't'
+#define ZBX_IPC_ANALYZER_UPTIME_ID	'u'
 #define ZBX_IPC_STRPOOL_ID	's'
 #define ZBX_IPC_COLLECTOR_ID	'l'
 #define ZBX_IPC_SELFMON_ID	'S'

@@ -34,6 +34,7 @@
 static zbx_mem_info_t	*history_mem = NULL;
 static zbx_mem_info_t	*history_text_mem = NULL;
 static zbx_mem_info_t	*trend_mem = NULL;
+static zbx_mem_info_t	*analyzer_uptime_mem = NULL;
 
 #define	LOCK_CACHE	zbx_mutex_lock(&cache_lock)
 #define	UNLOCK_CACHE	zbx_mutex_unlock(&cache_lock)
@@ -43,11 +44,17 @@ static zbx_mem_info_t	*trend_mem = NULL;
 #define	UNLOCK_CACHE_IDS	zbx_mutex_unlock(&cache_ids_lock)
 #define	LOCK_TRENDS_DB	zbx_mutex_lock(&trends_db_lock)
 #define	UNLOCK_TRENDS_DB	zbx_mutex_unlock(&trends_db_lock)
+#define	LOCK_ANALYZER_UPTIME zbx_mutex_lock(&analyzer_uptime_lock)
+#define	UNLOCK_ANALYZER_UPTIME zbx_mutex_unlock(&analyzer_uptime_lock)
+#define	LOCK_ANALYZER_UPTIME_Q zbx_mutex_lock(&analyzer_uptime_q_lock)
+#define	UNLOCK_ANALYZER_UPTIME_Q zbx_mutex_unlock(&analyzer_uptime_q_lock)
 
 static ZBX_MUTEX	cache_lock;
 static ZBX_MUTEX	trends_lock;
 static ZBX_MUTEX	cache_ids_lock;
 static ZBX_MUTEX	trends_db_lock;
+static ZBX_MUTEX analyzer_uptime_lock;
+static ZBX_MUTEX analyzer_uptime_q_lock;
 
 static char		*sql = NULL;
 static size_t		sql_alloc = 64 * ZBX_KIBIBYTE;
@@ -67,6 +74,7 @@ int			ZBX_SYNC_MAX = 1000;	/* must be less than ZBX_HISTORY_SIZE */
 static int		ZBX_ITEMIDS_SIZE = 0;
 
 static int		ZBX_TRENDS_DB_SIZE = 0;
+static int ZBX_ANALYZER_UPTIME_Q_SIZE = 0;
 
 #define ZBX_IDS_SIZE	10
 
@@ -121,6 +129,33 @@ ZBX_DC_TREND;
 
 typedef struct
 {
+    double avail;
+    int clock_avail;
+	int clock;
+}
+ZBX_DC_ANALYZER_UPTIME_HOUR;
+
+typedef struct
+{
+	zbx_uint64_t itemid;
+    zbx_uint64_t value_last;
+    ZBX_DC_ANALYZER_UPTIME_HOUR *hour_curr;
+    ZBX_DC_ANALYZER_UPTIME_HOUR *hour_prev;
+    ZBX_DC_ANALYZER_UPTIME_HOUR h1;
+    ZBX_DC_ANALYZER_UPTIME_HOUR h2;
+}
+ZBX_DC_ANALYZER_UPTIME;
+
+typedef struct
+{
+    zbx_uint64_t itemid;
+    double value;
+    int clock;
+}
+ZBX_DC_UPTIME_METRIC;
+
+typedef struct
+{
 	zbx_uint64_t	history_counter;	/* the total number of processed values */
 	zbx_uint64_t	history_float_counter;	/* the number of processed float values */
 	zbx_uint64_t	history_uint_counter;	/* the number of processed uint values */
@@ -148,6 +183,9 @@ typedef struct
 	zbx_timespec_t	last_ts;
     ZBX_DC_TREND *trends_db;
     int trends_num_db;
+    zbx_hashset_t analyzer_uptime;
+    ZBX_DC_UPTIME_METRIC *analyzer_uptime_q;
+    int analyzer_uptime_q_num;
 }
 ZBX_DC_CACHE;
 
@@ -664,17 +702,18 @@ static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *tre
 	trend = DCget_trend(history->itemid);
 
 	if (trend->num > 0 && (trend->clock != hour || trend->value_type != history->value_type)) {
+        char *process_type_str = get_process_type_string(process_type);
         LOCK_TRENDS_DB;
         unlock = 1;
-        zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: DCadd_trend: trends_num: %d, size: %d/%d",
-            process_type, process_num, *trends_num,
+        zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: DCadd_trend: trends_num: %d, size: %d/%d",
+            process_type_str, process_num, *trends_num,
             (*trends_num) * sizeof(ZBX_DC_TREND), ZBX_TRENDS_DB_SIZE * sizeof(ZBX_DC_TREND));
         // if trends db cache is full, wait for free space
         while(*trends_num == ZBX_TRENDS_DB_SIZE) {
             UNLOCK_TRENDS_DB;
             UNLOCK_TRENDS;
-            zabbix_log(LOG_LEVEL_WARNING, "%d/%d: DCadd_trend: trends db cache full",
-                process_type, process_num);
+            zabbix_log(LOG_LEVEL_WARNING, "[%s]#%d: DCadd_trend: trends db cache full",
+                process_type_str, process_num);
             zbx_sleep(1);
             LOCK_TRENDS;
             LOCK_TRENDS_DB;
@@ -756,6 +795,240 @@ static void	DCmass_update_trends(ZBX_DC_HISTORY *history, int history_num)
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
+static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *analyzer_uptime) {
+    ZBX_DC_ANALYZER_UPTIME *uptime;
+    ZBX_DC_ANALYZER_UPTIME_HOUR *tmp;
+    int hour;
+    
+    uptime = (ZBX_DC_ANALYZER_UPTIME *) zbx_hashset_search(analyzer_uptime, &history->itemid);
+    
+    if (NULL == uptime) {
+        if (DCis_uptime(history->itemid)) {
+            uptime = (ZBX_DC_ANALYZER_UPTIME *) malloc(sizeof(ZBX_DC_ANALYZER_UPTIME));
+            if (NULL != uptime) {
+                zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] item added, itemid: %d", history->itemid);
+                uptime->itemid = history->itemid;
+                uptime->value_last = 0;
+                uptime->h1.avail = 0;
+                uptime->h1.clock_avail = 0;
+                uptime->h1.clock = 0;
+                uptime->h2.avail = 0;
+                uptime->h2.clock_avail = 0;
+                uptime->h2.clock = 0;
+                uptime->hour_curr = &uptime->h1;
+                uptime->hour_prev = &uptime->h2;
+                zbx_hashset_insert(analyzer_uptime, uptime, sizeof(ZBX_DC_ANALYZER_UPTIME));
+            }
+        }
+        if (NULL == uptime)
+            return;
+    }
+
+	hour = history->clock - history->clock % SEC_PER_HOUR;
+    
+    // new hour
+    if (hour > uptime->hour_curr->clock) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] new hour begins, itemid: %d", history->itemid);
+        if (uptime->hour_prev->clock != 0 && uptime->hour_prev->clock_avail < (hour - 1)) {
+            // send unfinished analyze
+            zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] unfinished analyze, itemid: %d, hour: %d, avail: %d",
+                uptime->itemid, uptime->hour_prev->clock, uptime->hour_prev->avail);
+        }
+        tmp = uptime->hour_prev;
+        uptime->hour_prev = uptime->hour_curr;
+        uptime->hour_curr = tmp;
+        uptime->hour_curr->avail = 0;
+        uptime->hour_curr->clock_avail = hour;
+        uptime->hour_curr->clock = hour;
+    }
+    
+    // previous hour not finished
+    if (uptime->hour_prev->clock_avail != 0 && uptime->hour_prev->clock_avail < (hour - 1)
+            && history->value.ui64 > (history->clock - hour)) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] finishing prev hour, itemid: %d", history->itemid);
+        zbx_uint64_t downtime = 
+            (history->clock - history->value.ui64) - uptime->hour_prev->clock_avail;
+        if (downtime < 0)
+            downtime = 0;
+        
+        zbx_uint64_t left = (hour - 1) - uptime->hour_prev->clock_avail;
+        
+        uptime->hour_prev->avail += left - downtime;
+        uptime->hour_prev->clock_avail = hour - 1;
+    }
+    
+    // machine was down
+    if (history->value.ui64 < uptime->value_last) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] machine down discovered, itemid: %d", history->itemid);
+        
+        zbx_uint64_t left = uptime->value_last - uptime->hour_curr->clock_avail;
+        
+        uptime->hour_curr->avail += left;
+        uptime->hour_curr->clock_avail = history->clock;
+    }
+    
+    uptime->value_last = history->value.ui64;
+
+}
+
+static void analyzer_check_ready_uptimes(zbx_hashset_t *analyzer_uptime) {
+    zbx_hashset_iter_t	iter;
+    ZBX_DC_ANALYZER_UPTIME *uptime;
+    
+    LOCK_ANALYZER_UPTIME_Q;
+
+	zbx_hashset_iter_reset(&analyzer_uptime, &iter);
+
+	while (NULL != (uptime = (ZBX_DC_ANALYZER_UPTIME *)zbx_hashset_iter_next(&iter))) {
+		if (uptime->hour_prev->clock_avail == uptime->hour_curr->clock - 1) {
+            zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME], itemid: %d, hour: %d, avail: %d",
+                uptime->itemid, uptime->hour_prev->clock, uptime->hour_prev->avail);
+    
+            // if analyzer queue is full wait for free space
+            while(cache->analyzer_uptime_q_num == ZBX_ANALYZER_UPTIME_Q_SIZE) {
+                UNLOCK_ANALYZER_UPTIME_Q;
+                UNLOCK_ANALYZER_UPTIME;
+                zabbix_log(LOG_LEVEL_WARNING, "[%s]#%d: analyzer_check_ready_uptimes: analyzer uptime queue full",
+                    get_process_type_string(process_type), process_num);
+                zbx_sleep(1);
+                LOCK_ANALYZER_UPTIME;
+                LOCK_ANALYZER_UPTIME_Q;
+            }
+            
+            cache->analyzer_uptime_q[cache->analyzer_uptime_q_num].itemid = uptime->itemid;
+            cache->analyzer_uptime_q[cache->analyzer_uptime_q_num].value = uptime->hour_prev->avail;
+            cache->analyzer_uptime_q[cache->analyzer_uptime_q_num].clock = uptime->hour_prev->clock;
+            cache->analyzer_uptime_q_num++;
+            
+            uptime->hour_prev->avail = 0;
+            uptime->hour_prev->clock_avail = 0;
+            uptime->hour_prev->clock = 0;
+        }
+    }
+
+	UNLOCK_ANALYZER_UPTIME_Q;
+
+}
+
+static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
+    const char *__function_name = "DCmass_analyze";
+	int i;
+
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
+
+	LOCK_ANALYZER_UPTIME;
+
+	for (i = 0; i < history_num; i++) {
+		analyzer_process_uptime(&history[i], &cache->analyzer_uptime);
+	}
+    
+    analyzer_check_ready_uptimes(&cache->analyzer_uptime);
+	
+    UNLOCK_ANALYZER_UPTIME;
+
+	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
+}
+
+#ifdef HAVE_QUEUE
+static void uptimes_to_json(struct zbx_json *j, ZBX_DC_UPTIME_METRIC *uptimes, int uptimes_num, char *key) {
+    const size_t BUF_SIZE = 32;
+    char buf[BUF_SIZE];
+    ZBX_DC_UPTIME_METRIC *uptime = NULL;
+    size_t sql_offset = 0;
+    DB_RESULT result;
+	DB_ROW item_row;
+    int i;
+     
+    zbx_json_init(j, ZBX_JSON_STAT_BUF_LEN);
+    
+    // this is information for worker where to store this data
+    //zbx_json_addstring(j, "target", "trends", ZBX_JSON_TYPE_STRING);
+        
+    zbx_json_addarray(j, ZBX_PROTO_TAG_DATA);
+    
+	for (i = 0; i < uptimes_num; i++) {
+		uptime = &uptimes[i];
+        
+        sql_offset = 0;
+        zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
+            "SELECT h.host "
+            "FROM items as i LEFT JOIN (hosts as h) ON (i.hostid=h.hostid) "
+            "WHERE i.itemid=%d LIMIT 1", uptime->itemid);
+        result = DBselect("%s", sql);
+        item_row = DBfetch(result);
+        if (item_row == NULL) {
+            zabbix_log(LOG_LEVEL_ERR, "Unable to get item by id: %d", uptime->itemid);
+            continue;
+        }
+        
+        zbx_snprintf(buf, BUF_SIZE, "%f", uptime->value);
+        
+        zbx_json_addobject(j, NULL);
+        
+        zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
+        
+        
+        zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, key, ZBX_JSON_TYPE_STRING);
+        zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item_row[0], ZBX_JSON_TYPE_STRING);
+        
+        DBfree_result(result);
+        
+        zbx_snprintf(buf, BUF_SIZE, "%d", uptime->clock);
+        zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
+        
+        zbx_json_close(j);
+    }
+    
+}
+#endif
+
+#ifdef HAVE_QUEUE
+void DCmass_flush_analyzer_uptime(struct queue_ctx* qctx) {
+    ZBX_DC_UPTIME_METRIC *uptimes = NULL;
+    int uptimes_num = 0;
+    struct zbx_json j;
+    struct zbx_json_parse jp;
+    double sec, sec2;
+
+    sec = zbx_time();
+    char *process_type_str = get_process_type_string(process_type);
+    
+    LOCK_ANALYZER_UPTIME_Q;
+    
+    zabbix_log(LOG_LEVEL_INFORMATION, 
+        "[%s]#%d: DCmass_flush_analyzer_uptime: analyzer_uptime_q_num: %d",
+        process_type_str, process_num, cache->analyzer_uptime_q_num);
+    if (0 < cache->analyzer_uptime_q_num) {
+        uptimes_num = cache->analyzer_uptime_q_num;
+        uptimes = zbx_malloc(uptimes, uptimes_num * sizeof(ZBX_DC_UPTIME_METRIC));
+        while (0 < cache->analyzer_uptime_q_num) {
+            uptimes[cache->analyzer_uptime_q_num - 1] = 
+                cache->analyzer_uptime_q[cache->analyzer_uptime_q_num - 1];
+            cache->analyzer_uptime_q_num--;
+        }
+    }
+        
+    UNLOCK_ANALYZER_UPTIME_Q;
+    
+
+    if (uptimes_num > 0) {
+        sec2 = zbx_time();
+        uptimes_to_json(&j, uptimes, uptimes_num, "system.uptime.availability");
+        zbx_json_open(j.buffer, &jp);
+        queue_msg(qctx, &jp, NULL);
+        sec2 = zbx_time() - sec2;
+        zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: queue send: " 
+            ZBX_FS_DBL " seconds", process_type_str, process_num, sec2);
+    }
+
+    zbx_free(uptimes);
+    
+    sec = zbx_time() - sec;
+    zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: DCmass_flush_analyzer_uptime: " 
+        ZBX_FS_DBL " seconds", process_type_str, process_num, sec);
+}
+#endif
+
 #ifdef HAVE_QUEUE
 static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_num) {
     const size_t BUF_SIZE = 32;
@@ -832,10 +1105,12 @@ void DCmass_flush_trends() {
 
     sec = zbx_time();
     
+    char *process_type_str = get_process_type_string(process_type);
+    
     LOCK_TRENDS_DB;
     
-    zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: DCmass_flush_trends: trends_num_db: %d",
-        process_type, process_num, cache->trends_num_db);
+    zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: DCmass_flush_trends: trends_num_db: %d",
+        process_type_str, process_num, cache->trends_num_db);
     if (0 < cache->trends_num_db) {
         trends_num = cache->trends_num_db;
         trends = zbx_malloc(trends, trends_num * sizeof(ZBX_DC_TREND));
@@ -854,8 +1129,8 @@ void DCmass_flush_trends() {
         zbx_json_open(j.buffer, &jp);
         queue_msg(qctx, &jp, NULL);
         sec2 = zbx_time() - sec2;
-        zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: queue send: " 
-            ZBX_FS_DBL " seconds", process_type, process_num, sec2);
+        zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: queue send: " 
+            ZBX_FS_DBL " seconds", process_type_str, process_num, sec2);
     }
 #endif
 
@@ -872,8 +1147,8 @@ void DCmass_flush_trends() {
     zbx_free(trends);
     
     sec = zbx_time() - sec;
-    zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: DCmass_flush_trends: " 
-        ZBX_FS_DBL " seconds", process_type, process_num, sec);
+    zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: DCmass_flush_trends: " 
+        ZBX_FS_DBL " seconds", process_type_str, process_num, sec);
 }
 
 
@@ -2285,29 +2560,37 @@ int	DCsync_history(int sync_type)
 
 		if (0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER))
 		{
+            char *process_type_str = get_process_type_string(process_type);
+            
             sec = zbx_time();
             DCmass_update_items(history, history_num);
             sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: sync %d, DCmass_update_items: " 
-                ZBX_FS_DBL " seconds", process_type, process_num, syncs, sec);
+            zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: sync %d, DCmass_update_items: " 
+                ZBX_FS_DBL " seconds", process_type_str, process_num, syncs, sec);
             
             sec = zbx_time();    
             DCmass_add_history(history, history_num);
             sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: sync %d, DCmass_add_history: " 
-                ZBX_FS_DBL " seconds", process_type, process_num, syncs, sec);
+            zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: sync %d, DCmass_add_history: " 
+                ZBX_FS_DBL " seconds", process_type_str, process_num, syncs, sec);
             
             sec = zbx_time(); 
             DCmass_update_triggers(history, history_num);
             sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: sync %d, DCmass_update_triggers: " 
-                ZBX_FS_DBL " seconds", process_type, process_num, syncs, sec);
+            zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: sync %d, DCmass_update_triggers: " 
+                ZBX_FS_DBL " seconds", process_type_str, process_num, syncs, sec);
 
             sec = zbx_time();
             DCmass_update_trends(history, history_num);
             sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "%d/%d: sync %d, DCmass_update_trends: " 
-                ZBX_FS_DBL " seconds", process_type, process_num, syncs, sec);
+            zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: sync %d, DCmass_update_trends: " 
+                ZBX_FS_DBL " seconds", process_type_str, process_num, syncs, sec);
+            
+            sec = zbx_time();
+            DCmass_analyze(history, history_num);
+            sec = zbx_time() - sec;
+            zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: sync %d, DCmass_analyze: " 
+                ZBX_FS_DBL " seconds", process_type_str, process_num, syncs, sec);
 		}
 		else
 		{
@@ -2920,6 +3203,43 @@ static void	init_trend_cache()
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
+ZBX_MEM_FUNC_IMPL(__analyzer_uptime, analyzer_uptime_mem);
+
+static void	init_analyzer_cache()
+{
+	const char	*__function_name = "init_analyzer_cache";
+	key_t		analyzer_uptime_shm_key;
+	size_t		sz;
+
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
+
+	if (-1 == (analyzer_uptime_shm_key = zbx_ftok(CONFIG_FILE, ZBX_IPC_ANALYZER_UPTIME_ID)))
+	{
+		zabbix_log(LOG_LEVEL_CRIT, "cannot create IPC key for analyzer uptime cache");
+		exit(FAIL);
+	}
+
+	if (ZBX_MUTEX_ERROR == zbx_mutex_create_force(&analyzer_uptime_lock, ZBX_MUTEX_ANALYZER_UPTIME))
+	{
+		zbx_error("cannot create mutex for analyzer uptime cache");
+		exit(FAIL);
+	}
+
+	sz = zbx_mem_required_size(CONFIG_ANALYZER_UPTIME_CACHE_SIZE, 1, "analyzer uptime cache", "AnalyzerUptimeCacheSize");
+	zbx_mem_create(&analyzer_uptime_mem, analyzer_uptime_shm_key, ZBX_NO_MUTEX, sz, "analyzer uptime cache", "AnalyzerUptimeCacheSize");
+
+#define INIT_HASHSET_SIZE	100
+
+	zbx_hashset_create_ext(&cache->analyzer_uptime, INIT_HASHSET_SIZE,
+			ZBX_DEFAULT_UINT64_HASH_FUNC, ZBX_DEFAULT_UINT64_COMPARE_FUNC,
+			__analyzer_uptime_mem_malloc_func, __analyzer_uptime_mem_realloc_func,
+            __analyzer_uptime_mem_free_func);
+
+#undef INIT_HASHSET_SIZE
+
+	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
+}
+
 /******************************************************************************
  *                                                                            *
  * Function: init_database_cache                                              *
@@ -2959,9 +3279,16 @@ void	init_database_cache()
 		zbx_error("cannot create mutex for IDs cache");
 		exit(FAIL);
 	}
+    
+    if (ZBX_MUTEX_ERROR == zbx_mutex_create_force(&analyzer_uptime_q_lock, ZBX_MUTEX_ANALYZER_UPTIME_Q))
+	{
+		zbx_error("cannot create mutex for analyzer uptime cache");
+		exit(FAIL);
+	}
 
 	ZBX_HISTORY_SIZE = CONFIG_HISTORY_CACHE_SIZE / sizeof(ZBX_DC_HISTORY);
     ZBX_TRENDS_DB_SIZE = CONFIG_TRENDS_DB_CACHE_SIZE / sizeof(ZBX_DC_TREND);
+    ZBX_ANALYZER_UPTIME_Q_SIZE = CONFIG_ANALYZER_UPTIME_Q_CACHE_SIZE / sizeof(ZBX_DC_UPTIME_METRIC);
 	if (ZBX_SYNC_MAX > ZBX_HISTORY_SIZE)
 		ZBX_SYNC_MAX = ZBX_HISTORY_SIZE;
 	ZBX_ITEMIDS_SIZE = CONFIG_HISTSYNCER_FORKS * ZBX_SYNC_MAX;
@@ -2971,6 +3298,7 @@ void	init_database_cache()
 	sz = sizeof(ZBX_DC_CACHE);
 	sz += ZBX_HISTORY_SIZE * sizeof(ZBX_DC_HISTORY);
     sz += ZBX_TRENDS_DB_SIZE * sizeof(ZBX_DC_TREND);
+    sz += ZBX_ANALYZER_UPTIME_Q_SIZE * sizeof(ZBX_DC_UPTIME_METRIC);
 	sz += ZBX_ITEMIDS_SIZE * sizeof(zbx_uint64_t);
 	sz += sizeof(ZBX_DC_IDS);
 	sz = zbx_mem_required_size(sz, 4, "history cache", "HistoryCacheSize");
@@ -2987,6 +3315,8 @@ void	init_database_cache()
 	cache->itemids_num = 0;
     cache->trends_db = (ZBX_DC_TREND *)__history_mem_malloc_func(NULL, ZBX_TRENDS_DB_SIZE * sizeof(ZBX_DC_TREND));
     cache->trends_num_db = 0;
+    cache->analyzer_uptime_q = (ZBX_DC_UPTIME_METRIC *)__history_mem_malloc_func(NULL, ZBX_ANALYZER_UPTIME_Q_SIZE * sizeof(ZBX_DC_UPTIME_METRIC));
+    cache->analyzer_uptime_q_num = 0;
 	memset(&cache->stats, 0, sizeof(ZBX_DC_STATS));
 
 	ids = (ZBX_DC_IDS *)__history_mem_malloc_func(NULL, sizeof(ZBX_DC_IDS));
@@ -3005,6 +3335,8 @@ void	init_database_cache()
 	/* trend cache */
 	if (0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER))
 		init_trend_cache();
+    
+    init_analyzer_cache();
 
 	cache->last_ts.sec = 0;
 	cache->last_ts.ns = 0;

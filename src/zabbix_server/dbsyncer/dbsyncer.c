@@ -123,13 +123,13 @@ void	main_dbsyncer_loop()
 	}
 }
 
-void	main_dbsyncer_trends_loop()
+void main_dbsyncer_trends_loop()
 {
 	double	sec;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In main_dbsyncer_trends_loop() process_num:%d", process_num);
 
-	zbx_setproctitle("%s [connecting to the database]", get_process_type_string(process_type));
+	zbx_setproctitle("%s [connecting to the database and 0mq queue]", get_process_type_string(process_type));
     
 #ifdef HAVE_QUEUE
     // connect to zmq queue
@@ -145,7 +145,7 @@ void	main_dbsyncer_trends_loop()
 	{
 		zbx_setproctitle("%s [syncing trends]", get_process_type_string(process_type));
 
-		zabbix_log(LOG_LEVEL_DEBUG, "Syncing ...");
+		zabbix_log(LOG_LEVEL_DEBUG, "Syncing trends...");
 
 		sec = zbx_time();
         
@@ -165,6 +165,45 @@ void	main_dbsyncer_trends_loop()
 	}
 
 #ifdef HAVE_QUEUE
+    // clean up queue stuff
+    queue_ctx_destroy(&qctx);
+#endif
+
+}
+
+void main_dbsyncer_analyzer_uptime_loop()
+{
+	double	sec;
+
+	zabbix_log(LOG_LEVEL_DEBUG, "In main_dbsyncer_analyzer_uptime_loop() process_num:%d", process_num);
+	
+#ifdef HAVE_QUEUE
+    zbx_setproctitle("%s [connecting to 0mq queue]", get_process_type_string(process_type));
+    // connect to zmq queue
+    struct queue_ctx qctx;
+    queue_ctx_init(&qctx, CONFIG_ZMQ_QUEUE_RECOVERY_DIR, CONFIG_ZMQ_DAOC);
+    queue_sock_connect_msg(&qctx, CONFIG_ZMQ_QUEUE_ADDRESS);
+    queue_sock_connect_err(&qctx, CONFIG_ZMQ_ERRQUEUE_ADDRESS);
+
+	for (;;)
+	{
+		zbx_setproctitle("%s [pushing uptime analyze to queue]", get_process_type_string(process_type));
+
+		zabbix_log(LOG_LEVEL_DEBUG, "Pushing uptime analyze to queue...");
+
+		sec = zbx_time();
+        
+        DCmass_flush_analyzer_uptime(&qctx);
+
+        sec = zbx_time() - sec;
+
+		zabbix_log(LOG_LEVEL_DEBUG, "%s #%d spent " ZBX_FS_DBL
+            " seconds pushing uptime analuze to queue",
+            get_process_type_string(process_type), process_num, sec);
+
+		zbx_sleep_loop(CONFIG_HISTSYNCER_TRENDS_FREQUENCY);
+	}
+
     // clean up queue stuff
     queue_ctx_destroy(&qctx);
 #endif
