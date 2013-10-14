@@ -4823,13 +4823,15 @@ int DChas_triggers(zbx_uint64_t itemid) {
 
 int DCis_uptime(zbx_uint64_t itemid) {
     ZBX_DC_ITEM *item;
+    int result = 0;
     
     LOCK_CACHE;
+    
     item = zbx_hashset_search(&config->items, &itemid);
+    if (NULL != item && (0 == strcmp("system.uptime", item->key)))
+        result = 1;
+    
     UNLOCK_CACHE;
     
-    if (NULL != item && (0 == strcmp("system.uptime", item->key)))
-        return 1;
-    
-    return 0;
+    return result;
 }
