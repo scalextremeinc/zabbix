@@ -139,6 +139,7 @@ typedef struct
 {
 	zbx_uint64_t itemid;
     zbx_uint64_t value_last;
+    int clock_last;
     ZBX_DC_ANALYZER_UPTIME_HOUR *hour_curr;
     ZBX_DC_ANALYZER_UPTIME_HOUR *hour_prev;
     ZBX_DC_ANALYZER_UPTIME_HOUR h1;
@@ -795,6 +796,28 @@ static void	DCmass_update_trends(ZBX_DC_HISTORY *history, int history_num)
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
+static void analyzer_queue_uptime(ZBX_DC_ANALYZER_UPTIME *uptime) {
+    // if analyzer queue is full wait for free space
+    while(cache->analyzer_uptime_q_num == ZBX_ANALYZER_UPTIME_Q_SIZE) {
+        UNLOCK_ANALYZER_UPTIME_Q;
+        UNLOCK_ANALYZER_UPTIME;
+        zabbix_log(LOG_LEVEL_WARNING, "[%s]#%d: analyzer_queue_uptime: analyzer uptime queue full",
+            get_process_type_string(process_type), process_num);
+        zbx_sleep(1);
+        LOCK_ANALYZER_UPTIME;
+        LOCK_ANALYZER_UPTIME_Q;
+    }
+    
+    cache->analyzer_uptime_q[cache->analyzer_uptime_q_num].itemid = uptime->itemid;
+    cache->analyzer_uptime_q[cache->analyzer_uptime_q_num].value = uptime->hour_prev->avail;
+    cache->analyzer_uptime_q[cache->analyzer_uptime_q_num].clock = uptime->hour_prev->clock;
+    cache->analyzer_uptime_q_num++;
+    
+    uptime->hour_prev->avail = 0;
+    uptime->hour_prev->clock_avail = 0;
+    uptime->hour_prev->clock = 0;
+}
+
 static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *analyzer_uptime) {
     ZBX_DC_ANALYZER_UPTIME *uptime;
     ZBX_DC_ANALYZER_UPTIME_HOUR *tmp;
@@ -806,18 +829,20 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
         if (DCis_uptime(history->itemid)) {
             uptime = (ZBX_DC_ANALYZER_UPTIME *) malloc(sizeof(ZBX_DC_ANALYZER_UPTIME));
             if (NULL != uptime) {
-                zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] item added, itemid: %d", history->itemid);
                 uptime->itemid = history->itemid;
                 uptime->value_last = 0;
+                uptime->clock_last = 0;
                 uptime->h1.avail = 0;
                 uptime->h1.clock_avail = 0;
                 uptime->h1.clock = 0;
                 uptime->h2.avail = 0;
                 uptime->h2.clock_avail = 0;
                 uptime->h2.clock = 0;
-                uptime->hour_curr = &uptime->h1;
-                uptime->hour_prev = &uptime->h2;
+                uptime->hour_curr = &(uptime->h1);
+                uptime->hour_prev = &(uptime->h2);
                 zbx_hashset_insert(analyzer_uptime, uptime, sizeof(ZBX_DC_ANALYZER_UPTIME));
+                zabbix_log(LOG_LEVEL_INFORMATION, 
+                "[ANALYZER/UPTIME] item added, itemid: " ZBX_FS_UI64, history->itemid);
             }
         }
         if (NULL == uptime)
@@ -826,49 +851,70 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
 
 	hour = history->clock - history->clock % SEC_PER_HOUR;
     
+    //zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] itemid: %d, hour: %d", history->itemid, hour);
+    
     // new hour
     if (hour > uptime->hour_curr->clock) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] new hour begins, itemid: %d", history->itemid);
         if (uptime->hour_prev->clock != 0 && uptime->hour_prev->clock_avail < (hour - 1)) {
             // send unfinished analyze
-            zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] unfinished analyze, itemid: %d, hour: %d, avail: %d",
+            zabbix_log(LOG_LEVEL_INFORMATION, 
+                "[ANALYZER/UPTIME] unfinished analyze, itemid: "
+                ZBX_FS_UI64 ", hour: %d, avail: " ZBX_FS_UI64,
                 uptime->itemid, uptime->hour_prev->clock, uptime->hour_prev->avail);
+            LOCK_ANALYZER_UPTIME_Q;
+            analyzer_queue_uptime(uptime);
+            UNLOCK_ANALYZER_UPTIME_Q;
         }
+
+        //asm volatile("mfence" ::: "memory");
         tmp = uptime->hour_prev;
         uptime->hour_prev = uptime->hour_curr;
         uptime->hour_curr = tmp;
+        //asm volatile("mfence" ::: "memory");
+        
         uptime->hour_curr->avail = 0;
         uptime->hour_curr->clock_avail = hour;
         uptime->hour_curr->clock = hour;
+        zabbix_log(LOG_LEVEL_INFORMATION,
+            "[ANALYZER/UPTIME] new hour begins, itemid: "
+            ZBX_FS_UI64 ", hour: %d, avail: " ZBX_FS_UI64,
+            uptime->itemid, uptime->hour_curr->clock, uptime->hour_curr->avail);
     }
     
     // previous hour not finished
-    if (uptime->hour_prev->clock_avail != 0 && uptime->hour_prev->clock_avail < (hour - 1)
-            && history->value.ui64 > (history->clock - hour)) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] finishing prev hour, itemid: %d", history->itemid);
-        zbx_uint64_t downtime = 
-            (history->clock - history->value.ui64) - uptime->hour_prev->clock_avail;
-        if (downtime < 0)
-            downtime = 0;
+    if (uptime->hour_prev->clock_avail != 0 && uptime->hour_prev->clock_avail < (hour - 1)) {
         
-        zbx_uint64_t left = (hour - 1) - uptime->hour_prev->clock_avail;
-        
-        uptime->hour_prev->avail += left - downtime;
+        // if uptime value reaches previous hour
+        if (history->value.ui64 > (history->clock - hour)) {
+            zbx_uint64_t downtime = 
+                (history->clock - history->value.ui64) - uptime->hour_prev->clock_avail;
+            if (downtime < 0)
+                downtime = 0;            
+            zbx_uint64_t avail = (hour - 1) - uptime->hour_prev->clock_avail;
+            uptime->hour_prev->avail += avail - downtime;
+        }
         uptime->hour_prev->clock_avail = hour - 1;
+        zabbix_log(LOG_LEVEL_INFORMATION,
+            "[ANALYZER/UPTIME] finished prev hour, itemid: "
+            ZBX_FS_UI64 ", hour: %d, avail: " ZBX_FS_UI64,
+            uptime->itemid, uptime->hour_prev->clock, uptime->hour_prev->avail);
     }
     
     // machine was down
     if (history->value.ui64 < uptime->value_last) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] machine down discovered, itemid: %d", history->itemid);
+        zbx_uint64_t avail = uptime->clock_last - uptime->hour_curr->clock_avail;
         
-        zbx_uint64_t left = uptime->value_last - uptime->hour_curr->clock_avail;
-        
-        uptime->hour_curr->avail += left;
+        uptime->hour_curr->avail += avail;
         uptime->hour_curr->clock_avail = history->clock;
+        
+        zabbix_log(LOG_LEVEL_INFORMATION,
+            "[ANALYZER/UPTIME] machine down discovered, itemid: "
+            ZBX_FS_UI64 ", hour: %d, avail: " ZBX_FS_UI64,
+            uptime->itemid, uptime->hour_curr->clock, uptime->hour_curr->avail);
     }
     
     uptime->value_last = history->value.ui64;
-
+    uptime->clock_last = history->clock;
 }
 
 static void analyzer_check_ready_uptimes(zbx_hashset_t *analyzer_uptime) {
@@ -881,28 +927,12 @@ static void analyzer_check_ready_uptimes(zbx_hashset_t *analyzer_uptime) {
 
 	while (NULL != (uptime = (ZBX_DC_ANALYZER_UPTIME *)zbx_hashset_iter_next(&iter))) {
 		if (uptime->hour_prev->clock_avail == uptime->hour_curr->clock - 1) {
-            zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME], itemid: %d, hour: %d, avail: %d",
+            zabbix_log(LOG_LEVEL_INFORMATION,
+                "[ANALYZER/UPTIME] ready uptime, itemid: "
+                ZBX_FS_UI64 ", hour: %d, avail: " ZBX_FS_UI64,
                 uptime->itemid, uptime->hour_prev->clock, uptime->hour_prev->avail);
-    
-            // if analyzer queue is full wait for free space
-            while(cache->analyzer_uptime_q_num == ZBX_ANALYZER_UPTIME_Q_SIZE) {
-                UNLOCK_ANALYZER_UPTIME_Q;
-                UNLOCK_ANALYZER_UPTIME;
-                zabbix_log(LOG_LEVEL_WARNING, "[%s]#%d: analyzer_check_ready_uptimes: analyzer uptime queue full",
-                    get_process_type_string(process_type), process_num);
-                zbx_sleep(1);
-                LOCK_ANALYZER_UPTIME;
-                LOCK_ANALYZER_UPTIME_Q;
-            }
             
-            cache->analyzer_uptime_q[cache->analyzer_uptime_q_num].itemid = uptime->itemid;
-            cache->analyzer_uptime_q[cache->analyzer_uptime_q_num].value = uptime->hour_prev->avail;
-            cache->analyzer_uptime_q[cache->analyzer_uptime_q_num].clock = uptime->hour_prev->clock;
-            cache->analyzer_uptime_q_num++;
-            
-            uptime->hour_prev->avail = 0;
-            uptime->hour_prev->clock_avail = 0;
-            uptime->hour_prev->clock = 0;
+            analyzer_queue_uptime(uptime);
         }
     }
 
