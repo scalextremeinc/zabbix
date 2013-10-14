@@ -130,7 +130,7 @@ ZBX_DC_TREND;
 typedef struct
 {
     double avail;
-    int clock_avail;
+    int progress;
 	int clock;
 }
 ZBX_DC_ANALYZER_UPTIME_HOUR;
@@ -814,7 +814,7 @@ static void analyzer_queue_uptime(ZBX_DC_ANALYZER_UPTIME *uptime) {
     cache->analyzer_uptime_q_num++;
     
     uptime->hour_prev->avail = 0;
-    uptime->hour_prev->clock_avail = 0;
+    uptime->hour_prev->progress = 0;
     uptime->hour_prev->clock = 0;
 }
 
@@ -833,10 +833,10 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
                 uptime->value_last = 0;
                 uptime->clock_last = 0;
                 uptime->h1.avail = 0;
-                uptime->h1.clock_avail = 0;
+                uptime->h1.progress = 0;
                 uptime->h1.clock = 0;
                 uptime->h2.avail = 0;
-                uptime->h2.clock_avail = 0;
+                uptime->h2.progress = 0;
                 uptime->h2.clock = 0;
                 uptime->hour_curr = &(uptime->h1);
                 uptime->hour_prev = &(uptime->h2);
@@ -855,12 +855,13 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
     
     // new hour
     if (hour > uptime->hour_curr->clock) {
-        if (uptime->hour_prev->clock != 0 && uptime->hour_prev->clock_avail < (hour - 1)) {
+        if (uptime->hour_prev->clock != 0 && uptime->hour_prev->progress < (hour - 1)) {
             // send unfinished analyze
             zabbix_log(LOG_LEVEL_INFORMATION, 
-                "[ANALYZER/UPTIME] unfinished analyze, itemid: "
-                ZBX_FS_UI64 ", hour: %d, avail: " ZBX_FS_UI64,
-                uptime->itemid, uptime->hour_prev->clock, uptime->hour_prev->avail);
+                "[ANALYZER/UPTIME] unfinished analyze, "
+                "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f",
+                uptime->itemid, uptime->hour_prev->clock, uptime->hour_prev->progress,
+                uptime->hour_prev->avail);
             LOCK_ANALYZER_UPTIME_Q;
             analyzer_queue_uptime(uptime);
             UNLOCK_ANALYZER_UPTIME_Q;
@@ -873,44 +874,61 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
         //asm volatile("mfence" ::: "memory");
         
         uptime->hour_curr->avail = 0;
-        uptime->hour_curr->clock_avail = hour;
+        uptime->hour_curr->progress = hour;
         uptime->hour_curr->clock = hour;
+        
         zabbix_log(LOG_LEVEL_INFORMATION,
-            "[ANALYZER/UPTIME] new hour begins, itemid: "
-            ZBX_FS_UI64 ", hour: %d, avail: " ZBX_FS_UI64,
-            uptime->itemid, uptime->hour_curr->clock, uptime->hour_curr->avail);
+            "[ANALYZER/UPTIME] new hour begins, "
+            "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f",
+            uptime->itemid, uptime->hour_curr->clock, uptime->hour_curr->progress,
+            uptime->hour_curr->avail);
     }
     
     // previous hour not finished
-    if (uptime->hour_prev->clock_avail != 0 && uptime->hour_prev->clock_avail < (hour - 1)) {
+    if (uptime->hour_prev->progress != 0 && uptime->hour_prev->progress < (hour - 1)) {
         
         // if uptime value reaches previous hour
         if (history->value.ui64 > (history->clock - hour)) {
-            zbx_uint64_t downtime = 
-                (history->clock - history->value.ui64) - uptime->hour_prev->clock_avail;
+            int downtime = 
+                (history->clock - history->value.ui64) - uptime->hour_prev->progress;
             if (downtime < 0)
                 downtime = 0;            
-            zbx_uint64_t avail = (hour - 1) - uptime->hour_prev->clock_avail;
+            int avail = (hour - 1) - uptime->hour_prev->progress;
             uptime->hour_prev->avail += avail - downtime;
         }
-        uptime->hour_prev->clock_avail = hour - 1;
+        uptime->hour_prev->progress = hour - 1;
         zabbix_log(LOG_LEVEL_INFORMATION,
-            "[ANALYZER/UPTIME] finished prev hour, itemid: "
-            ZBX_FS_UI64 ", hour: %d, avail: " ZBX_FS_UI64,
-            uptime->itemid, uptime->hour_prev->clock, uptime->hour_prev->avail);
+            "[ANALYZER/UPTIME] finished prev hour, "
+            "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f",
+            uptime->itemid, uptime->hour_prev->clock, uptime->hour_prev->progress,
+            uptime->hour_prev->avail);
+    }
+    
+    // if first uptime during current hour starts after current hour beginning
+    if (uptime->hour_curr->progress == hour) {
+        int uptime_start = history->clock - history->value.ui64;
+        if (uptime_start > hour) {
+            uptime->hour_curr->progress = uptime_start;
+            zabbix_log(LOG_LEVEL_INFORMATION,
+                "[ANALYZER/UPTIME] first uptime after current hour, "
+                "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f",
+                uptime->itemid, uptime->hour_curr->clock, uptime->hour_curr->progress,
+                uptime->hour_curr->avail);
+        }
     }
     
     // machine was down
     if (history->value.ui64 < uptime->value_last) {
-        zbx_uint64_t avail = uptime->clock_last - uptime->hour_curr->clock_avail;
+        int avail = uptime->clock_last - uptime->hour_curr->progress;
         
         uptime->hour_curr->avail += avail;
-        uptime->hour_curr->clock_avail = history->clock;
+        uptime->hour_curr->progress = history->clock;
         
         zabbix_log(LOG_LEVEL_INFORMATION,
-            "[ANALYZER/UPTIME] machine down discovered, itemid: "
-            ZBX_FS_UI64 ", hour: %d, avail: " ZBX_FS_UI64,
-            uptime->itemid, uptime->hour_curr->clock, uptime->hour_curr->avail);
+            "[ANALYZER/UPTIME] machine down discovered, "
+            "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f",
+            uptime->itemid, uptime->hour_curr->clock, uptime->hour_curr->progress,
+            uptime->hour_curr->avail);
     }
     
     uptime->value_last = history->value.ui64;
@@ -926,11 +944,12 @@ static void analyzer_check_ready_uptimes(zbx_hashset_t *analyzer_uptime) {
 	zbx_hashset_iter_reset(&analyzer_uptime, &iter);
 
 	while (NULL != (uptime = (ZBX_DC_ANALYZER_UPTIME *)zbx_hashset_iter_next(&iter))) {
-		if (uptime->hour_prev->clock_avail == uptime->hour_curr->clock - 1) {
+		if (uptime->hour_prev->progress == uptime->hour_curr->clock - 1) {
             zabbix_log(LOG_LEVEL_INFORMATION,
-                "[ANALYZER/UPTIME] ready uptime, itemid: "
-                ZBX_FS_UI64 ", hour: %d, avail: " ZBX_FS_UI64,
-                uptime->itemid, uptime->hour_prev->clock, uptime->hour_prev->avail);
+                "[ANALYZER/UPTIME] ready uptime, "
+                "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f",
+                uptime->itemid, uptime->hour_prev->clock, uptime->hour_prev->progress,
+                uptime->hour_prev->avail);
             
             analyzer_queue_uptime(uptime);
         }
