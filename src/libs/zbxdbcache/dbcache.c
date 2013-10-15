@@ -877,6 +877,8 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
         uptime->h[uptime->curr].avail = 0;
         uptime->h[uptime->curr].progress = hour;
         uptime->h[uptime->curr].clock = hour;
+        uptime->value_last = 0;
+        uptime->clock_last = 0;
         
         zabbix_log(LOG_LEVEL_INFORMATION,
             "[ANALYZER/UPTIME] new hour begins, "
@@ -907,7 +909,7 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
             uptime->h[uptime->prev].avail, history->value.ui64, history->clock);
     }
     
-    // if first uptime during current hour starts after current hour beginning
+    // if first uptime during current hour starts after current hour beginning - move progress
     if (uptime->h[uptime->curr].progress == hour) {
         int uptime_start = history->clock - history->value.ui64;
         if (uptime_start > hour) {
