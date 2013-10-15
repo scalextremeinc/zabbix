@@ -820,6 +820,7 @@ static void analyzer_queue_uptime(ZBX_DC_ANALYZER_UPTIME *uptime) {
 static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *analyzer_uptime) {
     ZBX_DC_ANALYZER_UPTIME *uptime, *uptime_tmp;
     int hour;
+    zbx_uint64_t history_uptime;
     
     uptime = (ZBX_DC_ANALYZER_UPTIME *) zbx_hashset_search(analyzer_uptime, &history->itemid);
     
@@ -849,6 +850,19 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
     }
 
 	hour = history->clock - history->clock % SEC_PER_HOUR;
+    
+    switch (history->value_type)
+	{
+		case ITEM_VALUE_TYPE_FLOAT:
+            history_uptime = (zbx_uint64_t) history->value.dbl;
+			break;
+		case ITEM_VALUE_TYPE_UINT64:
+			history_uptime = history->value.ui64;
+			break;
+        default :
+            zabbix_log(LOG_LEVEL_INFORMATION, "Invalid uptime item value type: %d", history->value_type);
+            return;
+	}
     
     //zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] itemid: %d, hour: %d", history->itemid, hour);
     
@@ -885,16 +899,16 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
             "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f, uptime: "
             ZBX_FS_UI64 ", clock: %d",
             uptime->itemid, uptime->h[uptime->curr].clock, uptime->h[uptime->curr].progress,
-            uptime->h[uptime->curr].avail, history->value.ui64, history->clock);
+            uptime->h[uptime->curr].avail, history_uptime, history->clock);
     }
     
     // previous hour not finished
     if (uptime->h[uptime->prev].progress != 0 && uptime->h[uptime->prev].progress < (hour - 1)) {
         
         // if uptime value reaches previous hour
-        if (history->value.ui64 > (history->clock - hour)) {
+        if (history_uptime > (history->clock - hour)) {
             int downtime = 
-                (history->clock - history->value.ui64) - uptime->h[uptime->prev].progress;
+                (history->clock - history_uptime) - uptime->h[uptime->prev].progress;
             if (downtime < 0)
                 downtime = 0;            
             int avail = (hour - 1) - uptime->h[uptime->prev].progress;
@@ -906,12 +920,12 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
             "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f, uptime: "
             ZBX_FS_UI64 ", clock: %d",
             uptime->itemid, uptime->h[uptime->prev].clock, uptime->h[uptime->prev].progress,
-            uptime->h[uptime->prev].avail, history->value.ui64, history->clock);
+            uptime->h[uptime->prev].avail, history_uptime, history->clock);
     }
     
     // if first uptime during current hour starts after current hour beginning - move progress
     if (uptime->h[uptime->curr].progress == hour) {
-        int uptime_start = history->clock - history->value.ui64;
+        int uptime_start = history->clock - history_uptime;
         if (uptime_start > hour) {
             uptime->h[uptime->curr].progress = uptime_start;
             zabbix_log(LOG_LEVEL_INFORMATION,
@@ -919,12 +933,12 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
                 "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f, uptime: "
                 ZBX_FS_UI64 ", clock: %d",
                 uptime->itemid, uptime->h[uptime->curr].clock, uptime->h[uptime->curr].progress,
-                uptime->h[uptime->curr].avail, history->value.ui64, history->clock);
+                uptime->h[uptime->curr].avail, history_uptime, history->clock);
         }
     }
     
     // machine was down
-    if (history->value.ui64 < uptime->value_last) {
+    if (history_uptime < uptime->value_last) {
         int avail = uptime->clock_last - uptime->h[uptime->curr].progress;
         
         uptime->h[uptime->curr].avail += avail;
@@ -935,10 +949,10 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
             "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f, uptime: "
             ZBX_FS_UI64 ", clock: %d",
             uptime->itemid, uptime->h[uptime->curr].clock, uptime->h[uptime->curr].progress,
-            uptime->h[uptime->curr].avail, history->value.ui64, history->clock);
+            uptime->h[uptime->curr].avail, history_uptime, history->clock);
     }
     
-    uptime->value_last = history->value.ui64;
+    uptime->value_last = history_uptime;
     uptime->clock_last = history->clock;
 }
 
