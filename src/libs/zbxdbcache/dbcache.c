@@ -980,7 +980,8 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 }
 
 #ifdef HAVE_QUEUE
-static void uptimes_to_json(struct zbx_json *j, ZBX_DC_UPTIME_METRIC *uptimes, int uptimes_num, char *key) {
+static void uptimes_to_json(struct zbx_json *j, ZBX_DC_UPTIME_METRIC *uptimes, int uptimes_num,
+        char *key_second, char *key_percentage) {
     const size_t BUF_SIZE = 32;
     char buf[BUF_SIZE];
     ZBX_DC_UPTIME_METRIC *uptime = NULL;
@@ -988,6 +989,7 @@ static void uptimes_to_json(struct zbx_json *j, ZBX_DC_UPTIME_METRIC *uptimes, i
     DB_RESULT result;
 	DB_ROW item_row;
     int i;
+    double percent;
      
     zbx_json_init(j, ZBX_JSON_STAT_BUF_LEN);
     
@@ -999,6 +1001,7 @@ static void uptimes_to_json(struct zbx_json *j, ZBX_DC_UPTIME_METRIC *uptimes, i
 	for (i = 0; i < uptimes_num; i++) {
 		uptime = &uptimes[i];
         
+        // TODO consider querying cache
         sql_offset = 0;
         zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
             "SELECT h.host "
@@ -1017,8 +1020,22 @@ static void uptimes_to_json(struct zbx_json *j, ZBX_DC_UPTIME_METRIC *uptimes, i
         
         zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
         
+        zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, key_second, ZBX_JSON_TYPE_STRING);
+        zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item_row[0], ZBX_JSON_TYPE_STRING);
         
-        zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, key, ZBX_JSON_TYPE_STRING);
+        zbx_snprintf(buf, BUF_SIZE, "%d", uptime->clock);
+        zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
+        
+        zbx_json_close(j);
+
+        
+        percent = (uptime->value * 100.0) / 3600.0;
+        zbx_snprintf(buf, BUF_SIZE, "%f", percent);
+        zbx_json_addobject(j, NULL);
+        
+        zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
+        
+        zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, key_percentage, ZBX_JSON_TYPE_STRING);
         zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item_row[0], ZBX_JSON_TYPE_STRING);
         
         DBfree_result(result);
@@ -1039,6 +1056,8 @@ void DCmass_flush_analyzer_uptime(struct queue_ctx* qctx) {
     struct zbx_json j;
     struct zbx_json_parse jp;
     double sec, sec2;
+    int i;
+    const int BATCH_MAX_SIZE = 100;
 
     sec = zbx_time();
     char *process_type_str = get_process_type_string(process_type);
@@ -1049,12 +1068,15 @@ void DCmass_flush_analyzer_uptime(struct queue_ctx* qctx) {
         "[%s]#%d: DCmass_flush_analyzer_uptime: analyzer_uptime_q_num: %d",
         process_type_str, process_num, cache->analyzer_uptime_q_num);
     if (0 < cache->analyzer_uptime_q_num) {
-        uptimes_num = cache->analyzer_uptime_q_num;
+        uptimes_num = cache->analyzer_uptime_q_num < BATCH_MAX_SIZE
+            ? cache->analyzer_uptime_q_num : BATCH_MAX_SIZE;
         uptimes = zbx_malloc(uptimes, uptimes_num * sizeof(ZBX_DC_UPTIME_METRIC));
-        while (0 < cache->analyzer_uptime_q_num) {
+        i = 0;
+        while (0 < cache->analyzer_uptime_q_num && i < BATCH_MAX_SIZE) {
             uptimes[cache->analyzer_uptime_q_num - 1] = 
                 cache->analyzer_uptime_q[cache->analyzer_uptime_q_num - 1];
             cache->analyzer_uptime_q_num--;
+            i++;
         }
     }
         
@@ -1063,7 +1085,9 @@ void DCmass_flush_analyzer_uptime(struct queue_ctx* qctx) {
 
     if (uptimes_num > 0) {
         sec2 = zbx_time();
-        uptimes_to_json(&j, uptimes, uptimes_num, "system.uptime.availability");
+        uptimes_to_json(&j, uptimes, uptimes_num,
+            "system.uptime.availability[second]",
+            "system.uptime.availability[percent]");
         zbx_json_open(j.buffer, &jp);
         queue_msg(qctx, &jp, NULL);
         sec2 = zbx_time() - sec2;
@@ -3413,6 +3437,8 @@ static void	DCsync_all()
 	DCsync_history(ZBX_SYNC_FULL);
 	if (CONFIG_TRENDS_SQL_WRITE && 0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER))
 		DCsync_trends();
+    
+    analyzer_check_ready_uptimes(&cache->analyzer_uptime);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of DCsync_all()");
 }
