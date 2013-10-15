@@ -184,6 +184,8 @@ void main_dbsyncer_analyzer_uptime_loop()
     queue_ctx_init(&qctx, CONFIG_ZMQ_QUEUE_RECOVERY_DIR, CONFIG_ZMQ_DAOC);
     queue_sock_connect_msg(&qctx, CONFIG_ZMQ_QUEUE_ADDRESS);
     queue_sock_connect_err(&qctx, CONFIG_ZMQ_ERRQUEUE_ADDRESS);
+    
+    DBconnect(ZBX_DB_CONNECT_NORMAL);
 
 	for (;;)
 	{
