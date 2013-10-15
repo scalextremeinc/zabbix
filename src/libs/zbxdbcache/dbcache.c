@@ -959,9 +959,11 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
 static void analyzer_check_ready_uptimes(zbx_hashset_t *analyzer_uptime) {
     zbx_hashset_iter_t	iter;
     ZBX_DC_ANALYZER_UPTIME *uptime;
-    
-    LOCK_ANALYZER_UPTIME_Q;
+    time_t now;
 
+    LOCK_ANALYZER_UPTIME_Q;
+    
+    now = time(NULL);
 	zbx_hashset_iter_reset(&analyzer_uptime, &iter);
 
 	while (NULL != (uptime = (ZBX_DC_ANALYZER_UPTIME *)zbx_hashset_iter_next(&iter))) {
@@ -973,6 +975,19 @@ static void analyzer_check_ready_uptimes(zbx_hashset_t *analyzer_uptime) {
                 uptime->h[uptime->prev].avail);
             
             analyzer_queue_uptime(uptime);
+        } else if (
+            uptime->h[uptime->curr].clock != 0 &&
+            uptime->h[uptime->curr].clock < now - 86400 &&
+            uptime->h[uptime->prev].clock != 0 &&
+            uptime->h[uptime->prev].clock < now - 86400)
+        {
+            zabbix_log(LOG_LEVEL_INFORMATION,
+                "[ANALYZER/UPTIME] dropping obsolete entry, "
+                "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f",
+                uptime->itemid, uptime->h[uptime->prev].clock, uptime->h[uptime->prev].progress,
+                uptime->h[uptime->prev].avail);
+            //zbx_hashset_remove(&analyzer_uptime, uptime);
+            zbx_hashset_iter_remove(&iter);
         }
     }
 
