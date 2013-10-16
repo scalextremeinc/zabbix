@@ -39,6 +39,7 @@ extern int CONFIG_ZMQ_DAOC;
 
 extern int		CONFIG_HISTSYNCER_FREQUENCY;
 extern int CONFIG_HISTSYNCER_TRENDS_FREQUENCY;
+extern int CONFIG_HISTSYNCER_ANALYZER_UPTIMES_FREQUENCY;
 extern int		ZBX_SYNC_MAX;
 extern unsigned char	process_type;
 extern int		process_num;
@@ -203,7 +204,7 @@ void main_dbsyncer_analyzer_uptime_loop()
             " seconds pushing uptime analuze to queue",
             get_process_type_string(process_type), process_num, sec);
 
-		zbx_sleep_loop(CONFIG_HISTSYNCER_TRENDS_FREQUENCY);
+		zbx_sleep_loop(CONFIG_HISTSYNCER_ANALYZER_UPTIMES_FREQUENCY);
 	}
 
     // clean up queue stuff
