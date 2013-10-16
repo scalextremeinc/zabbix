@@ -927,7 +927,7 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
     }
     
     // if first uptime during current hour starts after current hour beginning - move progress
-    if (uptime->h[uptime->curr].progress == hour) {
+    if (0 == uptime->clock_last && uptime->h[uptime->curr].progress == hour) {
         int uptime_start = history->clock - history_uptime;
         if (uptime_start > hour) {
             uptime->h[uptime->curr].progress = uptime_start;
