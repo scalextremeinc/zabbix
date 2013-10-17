@@ -860,7 +860,7 @@ static void analyzer_process_uptime(ZBX_DC_HISTORY *history, zbx_hashset_t *anal
 		case ITEM_VALUE_TYPE_UINT64:
 			history_uptime = history->value.ui64;
 			break;
-        default :
+        default:
             zabbix_log(LOG_LEVEL_INFORMATION, "Invalid uptime item value type: %d",
                 history->value_type);
             return;

@@ -207,9 +207,11 @@ const char	*get_process_type_string(unsigned char process_type)
 			return "trends syncer";
         case ZBX_PROCESS_TYPE_HISTSYNCER_ANALYZER_UPTIMES:
 			return "uptimes syncer";
+        default:
+            return "unknown";
 	}
 
-	assert(0);
+	//assert(0);
 }
 
 /******************************************************************************
