@@ -967,10 +967,10 @@ static void analyzer_check_ready_uptimes(zbx_hashset_t *analyzer_uptime) {
     LOCK_ANALYZER_UPTIME_Q;
     
     now = time(NULL);
-	zbx_hashset_iter_reset(&analyzer_uptime, &iter);
-
+	zbx_hashset_iter_reset(analyzer_uptime, &iter);
+    
 	while (NULL != (uptime = (ZBX_DC_ANALYZER_UPTIME *)zbx_hashset_iter_next(&iter))) {
-		if (uptime->h[uptime->prev].progress == uptime->h[uptime->curr].clock - 1) {
+        if (uptime->h[uptime->prev].progress == uptime->h[uptime->curr].clock - 1) {
             zabbix_log(LOG_LEVEL_INFORMATION,
                 "[ANALYZER/UPTIME] ready uptime, "
                 "itemid: " ZBX_FS_UI64 ", hour: %d, progress: %d, avail: %f",
@@ -979,10 +979,10 @@ static void analyzer_check_ready_uptimes(zbx_hashset_t *analyzer_uptime) {
             
             analyzer_queue_uptime(uptime);
         } else if (
-            uptime->h[uptime->curr].clock != 0 &&
-            uptime->h[uptime->curr].clock < now - 86400 &&
-            uptime->h[uptime->prev].clock != 0 &&
-            uptime->h[uptime->prev].clock < now - 86400)
+            (uptime->h[uptime->curr].clock != 0 &&
+            uptime->h[uptime->curr].clock < now - 86400) ||
+            (uptime->h[uptime->prev].clock != 0 &&
+            uptime->h[uptime->prev].clock < now - 86400))
         {
             zabbix_log(LOG_LEVEL_INFORMATION,
                 "[ANALYZER/UPTIME] dropping obsolete entry, "
