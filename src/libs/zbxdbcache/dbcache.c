@@ -1118,7 +1118,7 @@ void DCmass_flush_analyzer_uptime(struct queue_ctx* qctx) {
         uptimes = zbx_malloc(uptimes, uptimes_num * sizeof(ZBX_DC_UPTIME_METRIC));
         i = 0;
         while (0 < cache->analyzer_uptime_q_num && i < BATCH_MAX_SIZE) {
-            uptimes[cache->analyzer_uptime_q_num - 1] = 
+            uptimes[uptimes_num - 1 - i] =
                 cache->analyzer_uptime_q[cache->analyzer_uptime_q_num - 1];
             cache->analyzer_uptime_q_num--;
             i++;
