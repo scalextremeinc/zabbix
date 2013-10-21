@@ -78,8 +78,7 @@ static int ZBX_ANALYZER_UPTIME_Q_SIZE = 0;
 
 #define ZBX_IDS_SIZE	10
 
-//static int ANALYZER_UPTIME_INTERVAL = SEC_PER_HOUR;
-static int ANALYZER_UPTIME_INTERVAL = 120;
+static int ANALYZER_UPTIME_INTERVAL = SEC_PER_HOUR;
 
 typedef struct
 {
