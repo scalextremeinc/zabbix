@@ -4719,7 +4719,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     sql = zbx_malloc(sql, sql_alloc);
 
     result = DBselect("select collectorid from items where hostid=" ZBX_FS_UI64 " and key_='%s.scalextreme.placeholder.alpha' limit 1", host->hostid, app_name);
-    if (NULL != (row = DBfetch(result))) {
+    if (NULL != (row = DBfetch(result)) && NULL != row[0]) {
         ZBX_STR2UINT64(collectorid, row[0]);
         DBfree_result(result);
         zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
