@@ -167,6 +167,12 @@ int __fix_time(struct zbx_json_parse *jp_msg, struct zbx_json *jp_msg_fixed,
 void queue_msg(struct queue_ctx* ctx, struct zbx_json_parse *jp_msg, zbx_timespec_t *timediff) {
     struct zbx_json jp_msg_fixed;
     char *msg = jp_msg->start;
+
+    if (NULL != zbx_json_pair_by_name(jp_msg, "mark_do_not_queue_tsdb")) {
+        //zabbix_log(LOG_LEVEL_INFORMATION, "Skip queue becaue of mark_do_not_queue_tsdb. msg:%s ", msg);
+        return;
+    }
+
     if (NULL != timediff) {
         //zabbix_log(LOG_LEVEL_ERR, "timediff sec: %d, ns: %d", timediff->sec, timediff->ns);
         if (-1 == __fix_time(jp_msg, &jp_msg_fixed, timediff))
