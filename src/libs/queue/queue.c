@@ -55,6 +55,25 @@ void queue_ctx_destroy(struct queue_ctx* ctx) {
         close(ctx->recovery_fd);
 }
 
+void __zmq_multi_connect(void* zmq_sock, const char* addr) {
+    // connect to all sockets specified as comma separated list
+    int i, j = 0;
+    char buf[128];
+    for (i = 0; i < strlen(addr); i++) {
+        if (addr[i + 1] == ',' || addr[i + 1] == '\0') {
+            memcpy(buf, addr + j, i + 1 - j);
+            buf[i + 1 - j] = '\0';
+            if (zmq_connect(zmq_sock, buf) == -1) {
+                zabbix_log(LOG_LEVEL_ERR, "Error connecting to zmq socket: %s, error: %s",
+                    buf, strerror(errno));
+            } else {
+                zabbix_log(LOG_LEVEL_INFORMATION, "Connected zmq socket: %s", buf);
+            }
+            j = i + 2;
+        }
+    }
+}
+
 void queue_sock_connect_msg(struct queue_ctx* ctx, const char* queue_addr_msg) {
     ctx->zmq_sock_msg = zmq_socket(ctx->zmq_ctx, ZMQ_PUSH);
     if (ctx->zmq_sock_msg == NULL) {
@@ -69,10 +88,7 @@ void queue_sock_connect_msg(struct queue_ctx* ctx, const char* queue_addr_msg) {
                 strerror(errno));
         }
     }
-    if (zmq_connect(ctx->zmq_sock_msg, queue_addr_msg) == -1) {
-        zabbix_log(LOG_LEVEL_ERR, "Error connecting to zmq socket: %s, error: %s",
-            queue_addr_msg, strerror(errno));
-    }
+    __zmq_multi_connect(ctx->zmq_sock_msg, queue_addr_msg);
 }
 
 void queue_sock_connect_err(struct queue_ctx* ctx, const char* queue_addr_err) {
@@ -94,10 +110,7 @@ void queue_sock_connect_err(struct queue_ctx* ctx, const char* queue_addr_err) {
                 strerror(errno));
         }
     }
-    if (zmq_connect(ctx->zmq_sock_err, queue_addr_err) == -1) {
-        zabbix_log(LOG_LEVEL_ERR, "Error connecting to zmq socket: %s, error: %s",
-            queue_addr_err, strerror(errno));
-    }
+    __zmq_multi_connect(ctx->zmq_sock_err, queue_addr_err);
 }
 
 int __fix_time(struct zbx_json_parse *jp_msg, struct zbx_json *jp_msg_fixed,
