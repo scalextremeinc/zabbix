@@ -4715,7 +4715,13 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     DBfree_result(result);
     //zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Application found: %s", app_name);
 
+    DBbegin();
     itemid = DBget_maxid("items");
+    if (itemid <= 0) {
+        DBrollback();
+        goto exit;
+    }
+    
     sql = zbx_malloc(sql, sql_alloc);
 
     result = DBselect("select collectorid from items where hostid=" ZBX_FS_UI64 " and key_='%s.scalextreme.placeholder.alpha' limit 1", host->hostid, app_name);
@@ -4748,17 +4754,26 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
             password, publickey, privatekey);
     }
 
-    DBexecute("%s", sql);
-    zbx_free(sql);
+    if (ZBX_DB_OK > DBexecute("%s", sql)) {
+        zabbix_log(LOG_LEVEL_ERR, "[AUTOCREATE] Insert into items failed, app: %s", app_name);
+        DBrollback();
+        goto exit;
+    }
     
     itemappid = DBget_maxid("items_applications");
-    DBexecute("insert into items_applications (itemappid,applicationid,itemid) values ("
-            ZBX_FS_UI64","ZBX_FS_UI64","ZBX_FS_UI64")", itemappid, applicationid, itemid);
+    if (ZBX_DB_OK > DBexecute("insert into items_applications (itemappid,applicationid,itemid) values ("
+            ZBX_FS_UI64","ZBX_FS_UI64","ZBX_FS_UI64")", itemappid, applicationid, itemid)) {
+        zabbix_log(LOG_LEVEL_ERR, "[AUTOCREATE] Insert into items_applications failed, app: %s", app_name);
+        DBrollback();
+        goto exit;
+    }
 
     zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item created: %s, app: %s", key, app_name);
+    DBcommit();
     ret = 0;
 
 exit:
+    zbx_free(sql);
     free(app_name);
     //zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Return status: %d", ret);
     return ret;
