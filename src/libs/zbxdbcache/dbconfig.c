@@ -4715,7 +4715,12 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     DBfree_result(result);
     //zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Application found: %s", app_name);
 
-    DBbegin();
+    //DBbegin();
+    if (ZBX_DB_OK != zbx_db_begin()) {
+        zabbix_log(LOG_LEVEL_ERR, "[AUTOCREATE] Failed beginning transaction");
+        goto exit;
+    }
+    
     itemid = DBget_maxid("items");
     if (itemid <= 0) {
         DBrollback();
@@ -4768,7 +4773,12 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
         goto exit;
     }
 
-    DBcommit();
+    //DBcommit();
+    if (ZBX_DB_OK != zbx_db_commit()) {
+        zabbix_log(LOG_LEVEL_ERR, "[AUTOCREATE] Failed commiting transaction, item: %s, app: %s", key, app_name);
+        goto exit;
+    }
+    
     ret = 0;
     zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item created: %s, app: %s", key, app_name);
 
