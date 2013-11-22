@@ -262,6 +262,65 @@ void	__zbx_mutex_unlock(const char *filename, int line, ZBX_MUTEX *mutex)
 #endif
 }
 
+/**
+ * Convert mutex to semaphore by increasing value,
+ * zabbix mutex is a semaphore with value 1
+ */
+int zbx_sem_init(ZBX_MUTEX *mutex, int value) {
+    union semun	semopts;
+    
+    semopts.val = value;
+    
+    if (-1 == semctl(ZBX_SEM_LIST_ID, *mutex, SETVAL, semopts)) {
+        zbx_error("semaphore [%i] error in semctl(SETVAL): %s", *mutex, zbx_strerror(errno));
+        return ZBX_MUTEX_ERROR;
+    }
+    
+    return 0;
+}
+
+int __zbx_sem_decr_nowait(const char *filename, int line, ZBX_MUTEX *mutex) {
+    struct sembuf sb;
+
+	sb.sem_num = *mutex;
+	sb.sem_op = -1;
+	sb.sem_flg = IPC_NOWAIT | SEM_UNDO;
+
+	if (!*mutex)
+		return;
+
+	while (-1 == semop(ZBX_SEM_LIST_ID, &sb, 1)) {
+        if (EAGAIN == errno) {
+            return -1;
+        } else if (EINTR != errno) {
+			zbx_error("[file:'%s',line:%d] lock failed: %s",
+					filename, line, zbx_strerror(errno));
+			exit(FAIL);
+		}
+	}
+    
+    return 0;
+}
+
+void __zbx_sem_incr(const char *filename, int line, ZBX_MUTEX *mutex) {
+	struct sembuf sb;
+
+	sb.sem_num = *mutex;
+	sb.sem_op = 1;
+	sb.sem_flg = SEM_UNDO;
+
+	if (!*mutex)
+		return;
+
+	while (-1 == semop(ZBX_SEM_LIST_ID, &sb, 1)) {
+		if (EINTR != errno) {
+			zbx_error("[file:'%s',line:%d] unlock failed: %s",
+					filename, line, zbx_strerror(errno));
+			exit(FAIL);
+		}
+	}
+}
+
 /******************************************************************************
  *                                                                            *
  * Function: zbx_mutex_destroy                                                *
