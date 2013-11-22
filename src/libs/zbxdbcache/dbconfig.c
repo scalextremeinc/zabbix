@@ -371,6 +371,7 @@ static zbx_mem_info_t	*config_mem;
 
 ZBX_MEM_FUNC_IMPL(__config, config_mem);
 
+static ZBX_MUTEX autocreate_mutex;
 static ZBX_MUTEX autocreate_sem;
 
 static void	poller_by_item(zbx_uint64_t itemid, zbx_uint64_t proxy_hostid,
@@ -2846,6 +2847,11 @@ void	init_configuration_cache()
 		zbx_error("Unable to create mutex for configuration cache");
 		exit(FAIL);
 	}
+    if (ZBX_MUTEX_ERROR == zbx_mutex_create_force(&autocreate_mutex, ZBX_MUTEX_AUTOCREATE))
+	{
+		zbx_error("Unable to create mutex for autocreare");
+		exit(FAIL);
+	}
     if (ZBX_MUTEX_ERROR == zbx_mutex_create_force(&autocreate_sem, ZBX_SEM_AUTOCREATE))
 	{
 		zbx_error("Unable to create sem for autocreare");
@@ -2973,6 +2979,7 @@ void	free_configuration_cache()
 	UNLOCK_CACHE;
 
 	zbx_mutex_destroy(&config_lock);
+    zbx_mutex_destroy(&autocreate_mutex);
     zbx_mutex_destroy(&autocreate_sem);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
@@ -4696,27 +4703,28 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
         goto exit;
     }
     
-    LOCK_CACHE;
-    
-    host = DCfind_host(proxy_hostid, host_name);
-    app = zbx_hashset_search(&config->auto_create, app_name);
-    
-    UNLOCK_CACHE;
-    
-    if (NULL == app) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, app auto create disabled: %s", app_name);
-        goto exit;
-    }
-    
-    if (NULL == host) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, host not found: %s", host_name);
-        goto exit;
-    }
-    
     if (-1 == zbx_sem_decr_nowait(&autocreate_sem)) {
         zabbix_log(LOG_LEVEL_INFORMATION,
             "[AUTOCREATE] Skipping item creation, autocreate limit reached");
         goto exit;
+    }
+    
+    zbx_mutex_lock(&autocreate_mutex);
+    app = zbx_hashset_search(&config->auto_create, app_name);
+    zbx_mutex_unlock(&autocreate_mutex);
+    
+    if (NULL == app) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, app auto create disabled: %s", app_name);
+        goto exit_sem;
+    }
+    
+    LOCK_CACHE;    
+    host = DCfind_host(proxy_hostid, host_name);
+    UNLOCK_CACHE;
+
+    if (NULL == host) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, host not found: %s", host_name);
+        goto exit_sem;
     }
     
     result = DBselect("select applicationid from applications where hostid=" ZBX_FS_UI64 
