@@ -4690,12 +4690,6 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
 
     zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Checking for autocreate, item: %s", key);
     
-    if (-1 == zbx_sem_decr_nowait(&autocreate_sem)) {
-        zabbix_log(LOG_LEVEL_INFORMATION,
-            "[AUTOCREATE] Skipping item creation, autocreate limit reached");
-        return ret;
-    }
-    
     app_name = (char*) malloc(MAX_NAME_LEN);
     if (find_app_name(key, app_name, MAX_NAME_LEN) != 0) {
         zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, item has no app name");
@@ -4719,6 +4713,12 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
         goto exit;
     }
     
+    if (-1 == zbx_sem_decr_nowait(&autocreate_sem)) {
+        zabbix_log(LOG_LEVEL_INFORMATION,
+            "[AUTOCREATE] Skipping item creation, autocreate limit reached");
+        goto exit;
+    }
+    
     result = DBselect("select applicationid from applications where hostid=" ZBX_FS_UI64 
         " and name='%s' limit 1", host->hostid, app_name);
     row = DBfetch(result);
@@ -4726,7 +4726,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     if (NULL == row) {
         DBfree_result(result);
         zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, application not found: %s", app_name);
-        goto exit;
+        goto exit_sem;
     }
     
     ZBX_STR2UINT64(applicationid, row[0]);
@@ -4735,16 +4735,21 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
 
     if (ZBX_DB_OK != zbx_db_begin()) {
         zabbix_log(LOG_LEVEL_ERR, "[AUTOCREATE] Failed beginning transaction");
-        goto exit;
+        goto exit_sem;
     }
     itemid = DBget_maxid("items");
     if (itemid <= 0) {
         DBrollback();
-        goto exit;
+        goto exit_sem;
+    }
+    itemappid = DBget_maxid("items_applications");
+    if (itemappid <= 0) {
+        DBrollback();
+        goto exit_sem;
     }
     if (ZBX_DB_OK != zbx_db_commit()) {
         zabbix_log(LOG_LEVEL_ERR, "[AUTOCREATE] Failed commiting transaction, item: %s, app: %s", key, app_name);
-        goto exit;
+        goto exit_sem;
     }
     
     sql = zbx_malloc(sql, sql_alloc);
@@ -4781,36 +4786,23 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
 
     if (ZBX_DB_OK > DBexecute("%s", sql)) {
         zabbix_log(LOG_LEVEL_ERR, "[AUTOCREATE] Insert into items failed, app: %s", app_name);
-        goto exit;
-    }
-    
-    if (ZBX_DB_OK != zbx_db_begin()) {
-        zabbix_log(LOG_LEVEL_ERR, "[AUTOCREATE] Failed beginning transaction");
-        goto exit;
-    }
-    itemappid = DBget_maxid("items_applications");
-    if (itemappid <= 0) {
-        DBrollback();
-        goto exit;
-    }
-    if (ZBX_DB_OK != zbx_db_commit()) {
-        zabbix_log(LOG_LEVEL_ERR, "[AUTOCREATE] Failed commiting transaction, item: %s, app: %s", key, app_name);
-        goto exit;
+        goto exit_sem;
     }
     
     if (ZBX_DB_OK > DBexecute("insert into items_applications (itemappid,applicationid,itemid) values ("
             ZBX_FS_UI64","ZBX_FS_UI64","ZBX_FS_UI64")", itemappid, applicationid, itemid)) {
         zabbix_log(LOG_LEVEL_ERR, "[AUTOCREATE] Insert into items_applications failed, app: %s", app_name);
-        goto exit;
+        goto exit_sem;
     }
     
     ret = 0;
     zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item created: %s, app: %s", key, app_name);
 
+exit_sem:
+    zbx_sem_incr(&autocreate_sem);
 exit:
     zbx_free(sql);
     zbx_free(app_name);
-    zbx_sem_incr(&autocreate_sem);
     //zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Return status: %d", ret);
     return ret;
 }
