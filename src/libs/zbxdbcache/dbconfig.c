@@ -2468,7 +2468,11 @@ void	DCsync_configuration()
 	DCsync_gmacros(gmacro_result);
 	DCsync_hmacros(hmacro_result);
 	DCsync_interfaces(if_result);	/* resolves macros for interface_snmpaddrs, must be after DCsync_hmacros() */
+    
+    zbx_mutex_lock(&autocreate_mutex);
     DCsync_autocreate(autocreate_result);
+    zbx_mutex_unlock(&autocreate_mutex);
+    
     DCsync_historyitems();
 	ssec = zbx_time() - sec;
 
