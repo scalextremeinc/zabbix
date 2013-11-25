@@ -4730,7 +4730,16 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
         zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, host not found: %s", host_name);
         goto exit_sem;
     }
-    
+
+    result = DBselect("select itemid from items where hostid=" ZBX_FS_UI64 " and key_='%s' limit 1",
+        host->hostid, key);
+    row = DBfetch(result);
+    DBfree_result(result);
+    if (NULL != row) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item exists, waiting for cache sync, key: %s", key);
+        goto exit_sem;
+    }
+
     result = DBselect("select applicationid from applications where hostid=" ZBX_FS_UI64 
         " and name='%s' limit 1", host->hostid, app_name);
     row = DBfetch(result);

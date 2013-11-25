@@ -1446,13 +1446,15 @@ void	process_mass_data(zbx_sock_t *sock, zbx_uint64_t proxy_hostid,
 	for (i = 0; i < value_num; i++)
 	{
 		if (SUCCEED != DCconfig_get_item_by_key(&item, proxy_hostid, values[i].host_name, values[i].key)) {
-            if (DCcreate_item(values[i].key, proxy_hostid, values[i].host_name) == 0) {
-                DCrefresh_items_cache();
-                if (SUCCEED != DCconfig_get_item_by_key(&item, proxy_hostid, values[i].host_name, values[i].key))
-                    continue;
-            } else {
-                continue;
-            }
+            DCcreate_item(values[i].key, proxy_hostid, values[i].host_name);
+            continue;
+            //if (DCcreate_item(values[i].key, proxy_hostid, values[i].host_name) == 0) {
+            //    DCrefresh_items_cache();
+            //    if (SUCCEED != DCconfig_get_item_by_key(&item, proxy_hostid, values[i].host_name, values[i].key))
+            //        continue;
+            //} else {
+            //    continue;
+            //}
         }
 
 		if (ZBX_FLAG_DISCOVERY_CHILD == item.flags)
