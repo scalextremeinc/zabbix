@@ -1239,7 +1239,7 @@ static void	process_active_checks(char *server, unsigned short port)
 					if (SUCCEED == regexp_match_ex(regexps, regexps_num, value, pattern, ZBX_CASE_SENSITIVE) &&
 							SUCCEED == regexp_match_ex(regexps, regexps_num, str_severity,
 									key_severity, ZBX_IGNORE_CASE) &&
-							(('\0' == *key_source) ? 1 : (0 == strcmp(key_source, source))) &&
+							(('\0' == *key_source) ? 1 : (0 == stricmp(key_source, source))) &&
 							SUCCEED == regexp_match_ex(regexps, regexps_num, str_logeventid,
 									key_logeventid, ZBX_CASE_SENSITIVE))
 					{
