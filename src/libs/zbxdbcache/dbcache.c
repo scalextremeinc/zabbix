@@ -1135,6 +1135,7 @@ void DCmass_flush_analyzer_uptime(struct queue_ctx* qctx) {
             "system.uptime.availability[percent]");
         zbx_json_open(j.buffer, &jp);
         queue_msg(qctx, &jp, NULL);
+        zbx_json_free(&j);
         sec2 = zbx_time() - sec2;
         zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: queue send: " 
             ZBX_FS_DBL " seconds", process_type_str, process_num, sec2);
@@ -1247,6 +1248,7 @@ void DCmass_flush_trends() {
         trends_to_json(&j, trends, trends_num);
         zbx_json_open(j.buffer, &jp);
         queue_msg(qctx, &jp, NULL);
+        zbx_json_free(&j);
         sec2 = zbx_time() - sec2;
         zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: queue send: " 
             ZBX_FS_DBL " seconds", process_type_str, process_num, sec2);
@@ -3517,6 +3519,8 @@ void	free_database_cache()
 		zbx_mutex_destroy(&trends_lock);
         zbx_mutex_destroy(&trends_db_lock);
     }
+
+    zbx_free(sql);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
