@@ -25,6 +25,9 @@
 #include "actions.h"
 #include "operations.h"
 
+extern int		process_num;
+extern unsigned char	process_type;
+
 /******************************************************************************
  *                                                                            *
  * Function: check_trigger_condition                                          *
@@ -1221,8 +1224,11 @@ void	process_actions(DB_EVENT *event)
 	DB_ROW		row;
 	zbx_uint64_t	actionid;
 	unsigned char	evaltype;
+    
+    char *process_type_str = get_process_type_string(process_type);
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() eventid:" ZBX_FS_UI64, __function_name, event->eventid);
+	zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: In %s() eventid:" ZBX_FS_UI64,
+            process_type_str, process_num, __function_name, event->eventid);
 
 	/*result = DBselect("select actionid,evaltype"
 			" from actions"
