@@ -983,6 +983,15 @@ static void analyzer_check_ready_uptimes(zbx_hashset_t *analyzer_uptime) {
                 "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f",
                 uptime->itemid, uptime->h[uptime->prev].clock, uptime->h[uptime->prev].progress,
                 uptime->h[uptime->prev].avail);
+
+            if (uptime->h[uptime->prev].avail > ANALYZER_UPTIME_INTERVAL) {
+                zabbix_log(LOG_LEVEL_INFORMATION,
+                        "[ANALYZER/UPTIME] avail exceeds interval - fixing, "
+                        "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f",
+                        uptime->itemid, uptime->h[uptime->prev].clock, uptime->h[uptime->prev].progress,
+                        uptime->h[uptime->prev].avail);
+                uptime->h[uptime->prev].avail = ANALYZER_UPTIME_INTERVAL;
+            }
             
             analyzer_queue_uptime(uptime);
         } else if (
