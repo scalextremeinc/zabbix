@@ -3022,6 +3022,8 @@ void	DCload_config()
 	DCsync_config(result);
 
 	UNLOCK_CACHE;
+    
+	DBfree_result(result);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
@@ -3466,7 +3468,7 @@ void	DCconfig_clean_functions(DC_FUNCTION *functions, int *errcodes, size_t num)
 
 	for (i = 0; i < num; i++)
 	{
-		if (SUCCEED != errcodes)
+		if (SUCCEED != errcodes[i])
 			continue;
 
 		zbx_free(functions[i].function);
