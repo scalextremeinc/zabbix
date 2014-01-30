@@ -1177,19 +1177,7 @@ static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_
     
 	for (i = 0; i < trends_num; i++) {
 		trend = &trends[i];
-        
-        sql_offset = 0;
-        zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
-            "SELECT i.key_,h.host "
-            "FROM items as i LEFT JOIN (hosts as h) ON (i.hostid=h.hostid) "
-            "WHERE i.itemid=%d LIMIT 1", trend->itemid);
-        result = DBselect("%s", sql);
-        item_row = DBfetch(result);
-        if (item_row == NULL) {
-            zabbix_log(LOG_LEVEL_ERR, "Unable to get item by id: %d", trend->itemid);
-            continue;
-        }
-        
+
         switch (trend->value_type) {
             case ITEM_VALUE_TYPE_FLOAT:
                 zbx_snprintf(buf, BUF_SIZE, "%f", trend->value_avg.dbl);
@@ -1200,6 +1188,22 @@ static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_
             default:
                 zabbix_log(LOG_LEVEL_ERR, "Unknown trend value type: %d", trend->value_type);
                 continue;
+        }
+        
+        sql_offset = 0;
+        zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
+            "SELECT i.key_,h.host "
+            "FROM items as i LEFT JOIN (hosts as h) ON (i.hostid=h.hostid) "
+            "WHERE i.itemid=%d LIMIT 1", trend->itemid);
+        
+        result = DBselect("%s", sql);
+
+        item_row = DBfetch(result);
+        if (item_row == NULL) {
+            zabbix_log(LOG_LEVEL_ERR, "Unable to get item by id: %d", trend->itemid);
+
+            DBfree_result(result);
+            continue;
         }
         
         zbx_json_addobject(j, NULL);
