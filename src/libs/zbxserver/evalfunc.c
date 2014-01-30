@@ -1975,6 +1975,7 @@ static int	evaluate_GRPANY(char *value, DB_ITEM *item, const char *function, con
 			ZBX_SQL_ITEM_FIELDS, ZBX_SQL_ITEM_TABLES);
 
     DBadd_condition_alloc(&sql, &sql_alloc, &sql_offset, "i.itemid", ids, ids_num);
+    zbx_free(ids);
 
     zabbix_log(LOG_LEVEL_DEBUG, "In %s() grpany - executing sql", __function_name);
     result = DBselect("%s", sql);
