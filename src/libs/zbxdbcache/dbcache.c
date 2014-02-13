@@ -1105,6 +1105,10 @@ static void uptimes_to_json(struct zbx_json *j, ZBX_DC_UPTIME_METRIC *uptimes, i
 
 #ifdef HAVE_QUEUE
 void DCmass_flush_analyzer_uptime(struct queue_ctx* qctx) {
+#else
+void DCmass_flush_analyzer_uptime() {
+#endif
+
     ZBX_DC_UPTIME_METRIC *uptimes = NULL;
     int uptimes_num = 0;
     struct zbx_json j;
@@ -1136,7 +1140,8 @@ void DCmass_flush_analyzer_uptime(struct queue_ctx* qctx) {
         
     UNLOCK_ANALYZER_UPTIME_Q;
     
-
+#ifdef HAVE_QUEUE
+    // send ready uptimes to queue
     if (uptimes_num > 0) {
         sec2 = zbx_time();
         uptimes_to_json(&j, uptimes, uptimes_num,
@@ -1149,6 +1154,11 @@ void DCmass_flush_analyzer_uptime(struct queue_ctx* qctx) {
         zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: queue send: " 
             ZBX_FS_DBL " seconds", process_type_str, process_num, sec2);
     }
+#else
+    // TODO
+    zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: discarding uptimes/avail data - not sending to queue",
+            process_type_str, process_num);
+#endif
 
     zbx_free(uptimes);
     
@@ -1156,7 +1166,6 @@ void DCmass_flush_analyzer_uptime(struct queue_ctx* qctx) {
     zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: DCmass_flush_analyzer_uptime: " 
         ZBX_FS_DBL " seconds", process_type_str, process_num, sec);
 }
-#endif
 
 #ifdef HAVE_QUEUE
 static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_num) {

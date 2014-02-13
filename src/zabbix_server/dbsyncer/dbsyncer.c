@@ -178,13 +178,15 @@ void main_dbsyncer_analyzer_uptime_loop()
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In main_dbsyncer_analyzer_uptime_loop() process_num:%d", process_num);
 	
-#ifdef HAVE_QUEUE
     zbx_setproctitle("%s [connecting to 0mq queue]", get_process_type_string(process_type));
+    
+#ifdef HAVE_QUEUE
     // connect to zmq queue
     struct queue_ctx qctx;
     queue_ctx_init(&qctx, CONFIG_ZMQ_QUEUE_RECOVERY_DIR, CONFIG_ZMQ_DAOC);
     queue_sock_connect_msg(&qctx, CONFIG_ZMQ_QUEUE_ADDRESS);
     queue_sock_connect_err(&qctx, CONFIG_ZMQ_ERRQUEUE_ADDRESS);
+#endif
     
     DBconnect(ZBX_DB_CONNECT_NORMAL);
 
@@ -196,7 +198,11 @@ void main_dbsyncer_analyzer_uptime_loop()
 
 		sec = zbx_time();
         
+#ifdef HAVE_QUEUE
         DCmass_flush_analyzer_uptime(&qctx);
+#else
+        DCmass_flush_analyzer_uptime();
+#endif
 
         sec = zbx_time() - sec;
 
@@ -207,6 +213,7 @@ void main_dbsyncer_analyzer_uptime_loop()
 		zbx_sleep_loop(CONFIG_HISTSYNCER_ANALYZER_UPTIMES_FREQUENCY);
 	}
 
+#ifdef HAVE_QUEUE
     // clean up queue stuff
     queue_ctx_destroy(&qctx);
 #endif
