@@ -1440,12 +1440,13 @@ void	process_mass_data(zbx_sock_t *sock, zbx_uint64_t proxy_hostid,
 	AGENT_RESULT	agent;
 	DC_ITEM		item;
 	int		i;
+    int skip_calculated_item = 1;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
 
 	for (i = 0; i < value_num; i++)
 	{
-		if (SUCCEED != DCconfig_get_item_by_key(&item, proxy_hostid, values[i].host_name, values[i].key)) {
+		if (SUCCEED != DCconfig_get_item_by_key(&item, proxy_hostid, values[i].host_name, values[i].key, skip_calculated_item)) {
             DCcreate_item(values[i].key, proxy_hostid, values[i].host_name);
             continue;
         }
