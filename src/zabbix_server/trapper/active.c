@@ -204,9 +204,12 @@ int	send_list_of_active_checks(zbx_sock_t *sock, char *request)
 	result = DBselect("%s", buffer);
 
 	buffer_offset = 0;
+
+    int skip_calculated_item = 0;
+
 	while (NULL != (row = DBfetch(result)))
 	{
-		if (FAIL == DCconfig_get_item_by_key(&dc_item, (zbx_uint64_t)0, host, row[0]))
+		if (FAIL == DCconfig_get_item_by_key(&dc_item, (zbx_uint64_t)0, host, row[0], skip_calculated_item))
 		{
 			zabbix_log(LOG_LEVEL_DEBUG, "%s() Item '%s' was not found in the server cache. Not sending now.",
 					__function_name, row[0]);
@@ -367,9 +370,10 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
 
     unsigned long prev_id = 0, current_id, collector_mtime;
     char close_item_json = 0;
+    int skip_calculated_item = 0;
 	while (NULL != (row = DBfetch(result)))
 	{
-		if (FAIL == DCconfig_get_item_by_key(&dc_item, (zbx_uint64_t)0, host, row[0]))
+		if (FAIL == DCconfig_get_item_by_key(&dc_item, (zbx_uint64_t)0, host, row[0], skip_calculated_item))
 		{
 			zabbix_log(LOG_LEVEL_DEBUG, "%s() Item '%s' was not found in the server cache. Not sending now.", __function_name, row[0]);
 			continue;

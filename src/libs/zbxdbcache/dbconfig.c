@@ -3350,13 +3350,16 @@ static void	DCget_trigger(DC_TRIGGER *dst_trigger, const ZBX_DC_TRIGGER *src_tri
  *             proxy_hostid - [IN] proxy host ID                              *
  *             host - [IN] host.host                                          *
  *             key - [IN] item key                                            *
+ *             skip_calculated_item - [IN] 1 yes, 0 no
  *                                                                            *
  * Return value: SUCCEED if record located and FAIL otherwise                 *
  *                                                                            *
  * Author: Alexander Vladishev, Aleksandrs Saveljevs                          *
  *                                                                            *
  ******************************************************************************/
-int	DCconfig_get_item_by_key(DC_ITEM *item, zbx_uint64_t proxy_hostid, const char *host, const char *key)
+int	DCconfig_get_item_by_key(DC_ITEM *item,
+    zbx_uint64_t proxy_hostid, const char *host,
+    const char *key, int skip_calculated_item)
 {
 	int			res = FAIL;
 	const ZBX_DC_ITEM	*dc_item;
@@ -3369,6 +3372,12 @@ int	DCconfig_get_item_by_key(DC_ITEM *item, zbx_uint64_t proxy_hostid, const cha
 
 	if (NULL == (dc_item = DCfind_item(dc_host->hostid, key)))
 		goto unlock;
+
+    if (skip_calculated_item && dc_item->type == ITEM_TYPE_CALCULATED) { 
+        zabbix_log(LOG_LEVEL_INFORMATION, "DCconfig_get_item_by_key skip - calculated item %s, %s", host, key);
+        goto unlock;
+    }
+
 
 	DCget_host(&item->host, dc_host);
 	DCget_item(item, dc_item);
