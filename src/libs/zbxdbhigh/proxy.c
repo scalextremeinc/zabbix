@@ -1681,7 +1681,7 @@ int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
 			clean_agent_values(values, value_num);
 			total_num += value_num;
 			value_num = 0;
-            if (CONFIG_TRAPPER_PRPCESSING_LIMIT > 0 && count <= CONFIG_TRAPPER_PRPCESSING_LIMIT) {
+            if (CONFIG_TRAPPER_PRPCESSING_LIMIT > 0 && count >= CONFIG_TRAPPER_PRPCESSING_LIMIT) {
                 zabbix_log(LOG_LEVEL_INFORMATION, "Trapper, single message size limit reached - skipping items, limt: %d, host: %s",
                         CONFIG_TRAPPER_PRPCESSING_LIMIT, av->host_name);
                 break;
