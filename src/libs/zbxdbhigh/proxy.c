@@ -28,6 +28,7 @@
 #include "discovery.h"
 
 extern int CONFIG_TIME_FIX;
+extern int CONFIG_TRAPPER_PRPCESSING_LIMIT;
 
 typedef struct
 {
@@ -1556,6 +1557,7 @@ int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
 	double			sec;
 	zbx_timespec_t		ts, proxy_timediff;
 	static AGENT_VALUE	*values = NULL, *av;
+    int count = 0;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "In %s()", __function_name);
 
@@ -1605,6 +1607,9 @@ int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
 	{
 		if (FAIL == (ret = zbx_json_brackets_open(p, &jp_row)))
 			break;
+
+        if (CONFIG_TRAPPER_PRPCESSING_LIMIT > 0) 
+            count++; 
 
 		av = &values[value_num];
 
@@ -1667,13 +1672,19 @@ int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
 
 		value_num++;
 
-		if (VALUES_MAX == value_num)
+		if (VALUES_MAX == value_num ||
+                (CONFIG_TRAPPER_PRPCESSING_LIMIT > 0 && count <= CONFIG_TRAPPER_PRPCESSING_LIMIT))
 		{
 			process_mass_data(sock, proxy_hostid, values, value_num, &processed);
 
 			clean_agent_values(values, value_num);
 			total_num += value_num;
 			value_num = 0;
+            if (CONFIG_TRAPPER_PRPCESSING_LIMIT > 0 && count <= CONFIG_TRAPPER_PRPCESSING_LIMIT) {
+                zabbix_log(LOG_LEVEL_INFORMATION, "Trapper, single message size limit reached - skipping items, limt: %d, host: %s",
+                        CONFIG_TRAPPER_PRPCESSING_LIMIT, av->host_name);
+                break;
+            }
 		}
 	}
 

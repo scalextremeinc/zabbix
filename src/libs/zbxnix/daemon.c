@@ -268,9 +268,9 @@ int	daemon_start(int allow_root)
 	sigaction(SIGQUIT, &phan, NULL);
 	sigaction(SIGTERM, &phan, NULL);
 	sigaction(SIGPIPE, &phan, NULL);
-	sigaction(SIGILL, &phan, NULL);
-	sigaction(SIGFPE, &phan, NULL);
-	sigaction(SIGSEGV, &phan, NULL);
+	//sigaction(SIGILL, &phan, NULL);
+	//sigaction(SIGFPE, &phan, NULL);
+	//sigaction(SIGSEGV, &phan, NULL);
 	sigaction(SIGBUS, &phan, NULL);
 	sigaction(SIGALRM, &phan, NULL);
 	sigaction(SIGUSR1, &phan, NULL);
