@@ -327,6 +327,18 @@ ZBX_DC_HISTORY_ITEM;
 
 typedef struct
 {
+    const char *prefix;
+    const char *app;
+    int prefix_len;
+    int app_len;
+    int delta;
+}
+ZBX_DC_AUTOCREATE;
+
+
+
+typedef struct
+{
 	zbx_hashset_t		items;
 	zbx_hashset_t		items_hk;		/* hostid, key */
 	zbx_hashset_t		snmpitems;
@@ -711,12 +723,36 @@ static int	DCsync_config(DB_RESULT result)
 
 static void DCsync_autocreate(DB_RESULT result) {
     DB_ROW row;
+    ZBX_DC_AUTOCREATE autocreate_local, *autocreate_row;
+    int found = 0;
+
+    zbx_hashset_iter_t	iter;
+    zbx_hashset_iter_reset(&config->auto_create, &iter);
+
+    while (NULL != (autocreate_row = zbx_hashset_iter_next(&iter))) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Sync autocreate releasing: prefix:%s app:%s", autocreate_row->prefix, autocreate_row->app);
+		zbx_strpool_release(autocreate_row->app);
+		zbx_strpool_release(autocreate_row->prefix);
+    }
+
     
     zbx_hashset_clear(&config->auto_create);
     while (NULL != (row = DBfetch(result))) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Sync autocreate: %s", row[0]);
-        zbx_hashset_insert(&config->auto_create, row[0], strlen(row[0]));
+
+		DCstrpool_replace(found, &autocreate_local.prefix, row[0]);
+        autocreate_local.prefix_len = strlen(row[0]);
+
+		DCstrpool_replace(found, &autocreate_local.app, row[1]);
+        autocreate_local.app_len = strlen(row[1]);
+
+        autocreate_local.delta = atoi(row[2]);
+
+        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Sync autocreate: prefix:%s app:%s delta:%d",
+            autocreate_local.prefix, autocreate_local.app, autocreate_local.delta);
+
+        zbx_hashset_insert(&config->auto_create, &autocreate_local, sizeof(ZBX_DC_AUTOCREATE));
     }
+    zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Sync autocreate: num_data %d", config->auto_create.num_data);
 }
 
 static void DCsync_historyitems()
@@ -2449,7 +2485,7 @@ void	DCsync_configuration()
 	ifsec = zbx_time() - sec;
     
     autocreate_result = DBselect(
-			"select app"
+			"select prefix,app,delta"
 			" from autocreate"
 			" where enabled=1"
 				DB_NODE,
@@ -2905,6 +2941,7 @@ void	init_configuration_cache()
 	CREATE_HASHSET(config->interfaces);
 	CREATE_HASHSET(config->interface_snmpitems);
 	CREATE_HASHSET(config->historyitems);
+    CREATE_HASHSET(config->auto_create);
 
 	CREATE_HASHSET_EXT(config->items_hk, __config_item_hk_hash, __config_item_hk_compare);
 	CREATE_HASHSET_EXT(config->hosts_ph, __config_host_ph_hash, __config_host_ph_compare);
@@ -2912,7 +2949,6 @@ void	init_configuration_cache()
 	CREATE_HASHSET_EXT(config->hmacros_hm, __config_hmacro_hm_hash, __config_hmacro_hm_compare);
 	CREATE_HASHSET_EXT(config->interfaces_ht, __config_interface_ht_hash, __config_interface_ht_compare);
 	CREATE_HASHSET_EXT(config->interface_snmpaddrs, __config_interface_addr_hash, __config_interface_addr_compare);
-    CREATE_HASHSET_EXT(config->auto_create, ZBX_DEFAULT_STRING_HASH_FUNC, strcmp);
 
 	zbx_vector_ptr_create_ext(&config->time_triggers,
 			__config_mem_malloc_func,
@@ -4655,22 +4691,34 @@ void	DCget_user_macro(zbx_uint64_t *hostids, int host_num, const char *macro, ch
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
-static int find_app_name(char *key, char* app_name, size_t n) {
-    char c;
-    int i = 0, j = 0;
-    do {
-        c = key[i];
-        if (c == '.' && key[i + 1] != '\0') {
-            j = i > n - 1 ? n - 1 : i;
-            memcpy(app_name, key, j);
-            app_name[j] = '\0';
-            //zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item contains app name: %s", app_name);
-            return 0;
+static ZBX_DC_AUTOCREATE *find_autocreate(char *key) {
+
+
+    ZBX_DC_AUTOCREATE *autocreate_row = NULL;
+    zbx_hashset_iter_t	iter;
+
+    //zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] find_autocreate key:%s", key);
+
+    zbx_hashset_iter_reset(&config->auto_create, &iter);
+
+    //zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] find_autocreate number %d", config->auto_create.num_data);
+
+    while (NULL != (autocreate_row = zbx_hashset_iter_next(&iter))) {
+
+        /*
+        zabbix_log(LOG_LEVEL_DEBUG,
+                "[AUTOCREATE] find_autocreate matching prefix:%s(%d) app:%s(%d)",
+                autocreate_row->prefix, autocreate_row->prefix_len, autocreate_row->app, autocreate_row->app_len);
+        */
+
+        if ( 0 == strncmp(key, autocreate_row->prefix, autocreate_row->prefix_len)) {
+            break;
         }
-        i++;
-    } while (c != '\0');
-    zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item doesn't contain app name");
-    return -1;
+
+    }
+
+
+    return autocreate_row;
 }
 
 int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
@@ -4679,7 +4727,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     DB_ROW row;
     const size_t MAX_NAME_LEN = 256;
     char *app;
-    char *app_name;
+    char *app_name = NULL;
     zbx_uint64_t applicationid;
     zbx_uint64_t itemappid;
     int ret = -1;
@@ -4709,29 +4757,41 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     char *sql = NULL;
     size_t sql_offset = 0;
     size_t sql_alloc = 512;
+    ZBX_DC_AUTOCREATE *autocreate;
+    int delta;
 
     zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Checking for autocreate, item: %s", key);
     
-    app_name = (char*) malloc(MAX_NAME_LEN);
-    if (find_app_name(key, app_name, MAX_NAME_LEN) != 0) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, item has no app name");
-        goto exit;
-    }
-    
+
     if (-1 == zbx_sem_decr_nowait(&autocreate_sem)) {
         zabbix_log(LOG_LEVEL_INFORMATION,
             "[AUTOCREATE] Skipping item creation, autocreate limit reached");
         goto exit;
     }
-    
+
+
     zbx_mutex_lock(&autocreate_mutex);
-    app = zbx_hashset_search(&config->auto_create, app_name);
-    zbx_mutex_unlock(&autocreate_mutex);
-    
-    if (NULL == app) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, app auto create disabled: %s", app_name);
+
+    autocreate = find_autocreate(key);
+
+    if (NULL == autocreate) {
+
+        zbx_mutex_unlock(&autocreate_mutex);
         goto exit_sem;
+
+    } else {
+
+        app_name = (char*) malloc(MAX_NAME_LEN);
+        memcpy(app_name, autocreate->app, autocreate->app_len);
+        app_name[autocreate->app_len] = '\0';
+        delta = autocreate->delta;
+
+        zbx_mutex_unlock(&autocreate_mutex);
     }
+
+
+
+
     
     LOCK_CACHE;    
     host = DCfind_host(proxy_hostid, host_name);
@@ -4757,7 +4817,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     
     if (NULL == row) {
         DBfree_result(result);
-        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, application not found: %s", app_name);
+        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, application not found: %s host:%s hostid:%d", app_name, host_name, host->hostid);
         goto exit_sem;
     }
     
@@ -4794,26 +4854,26 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
             "insert into items"
             " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
                 "logtimefmt,ipmi_sensor,snmp_community,snmp_oid,port,snmpv3_securityname,"
-                "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey,collectorid)"
+                "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey,collectorid,delta)"
             " values (" ZBX_FS_UI64 ",'%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
-            "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s', " ZBX_FS_UI64 ")",
+            "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s', " ZBX_FS_UI64 ",%d)",
             itemid, name, key, host->hostid, type, value_type, data_type, delay,
             delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
             port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
-            password, publickey, privatekey, collectorid);
+            password, publickey, privatekey, collectorid,delta);
     } else {
         DBfree_result(result);
         zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
             "insert into items"
             " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
                 "logtimefmt,ipmi_sensor,snmp_community,snmp_oid,port,snmpv3_securityname,"
-                "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey)"
+                "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey,delta)"
             " values (" ZBX_FS_UI64 ",'%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
-            "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')",
+            "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s',%d)",
             itemid, name, key, host->hostid, type, value_type, data_type, delay,
             delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
             port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
-            password, publickey, privatekey);
+            password, publickey, privatekey,delta);
     }
 
     if (ZBX_DB_OK > DBexecute("%s", sql)) {
