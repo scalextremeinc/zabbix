@@ -858,7 +858,7 @@ static void analyzer_avail_process_pings(
             return;
     }
 
-	interval_start = history->clock - history->clock % ANALYZER_AVAIL_INTERVAL;
+	interval_start = history->clock - (history->clock % ANALYZER_AVAIL_INTERVAL);
     prev_interval_end = interval_start - 1;
 
     // new hour
@@ -917,8 +917,12 @@ static void analyzer_avail_process_pings(
     }
    
     // if previous ping is within ping max freq increase availability
-    if (avail->h[avail->curr].progress > history->clock - ANALYZER_AVAIL_PING_FREQ)
+    if (avail->h[avail->curr].progress > history->clock - ANALYZER_AVAIL_PING_FREQ) {
+        // count first second too
+        if (0 == avail->h[avail->curr].avail)
+            avail->h[avail->curr].avail++;
         avail->h[avail->curr].avail += history->clock - avail->h[avail->curr].progress;
+    }
     
     avail->h[avail->curr].progress = history->clock;
 }
@@ -957,7 +961,7 @@ static void analyzer_avail_process_uptimes(
             return;
     }
 
-	interval_start = history->clock - history->clock % ANALYZER_AVAIL_INTERVAL;
+	interval_start = history->clock - (history->clock % ANALYZER_AVAIL_INTERVAL);
     prev_interval_end = interval_start - 1;
     
     switch (history->value_type)
