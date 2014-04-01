@@ -203,6 +203,9 @@ extern const int	INTERFACE_TYPE_PRIORITY[INTERFACE_TYPE_COUNT];
 #define ZBX_FLAG_DISCOVERY_CHILD	0x02	/* low-level discovery proto-item, proto-trigger or proto-graph */
 #define ZBX_FLAG_DISCOVERY_CREATED	0x04	/* auto-created item, trigger or graph */
 
+#define ZBX_FLAG_AVAIL_UPTIME 0x08
+#define ZBX_FLAG_AVAIL_PING 0x10
+
 typedef enum
 {
 	ITEM_AUTHTYPE_PASSWORD = 0,

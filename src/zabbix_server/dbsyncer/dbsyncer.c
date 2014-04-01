@@ -172,11 +172,11 @@ void main_dbsyncer_trends_loop()
 
 }
 
-void main_dbsyncer_analyzer_uptime_loop()
+void main_dbsyncer_analyzer_loop()
 {
 	double	sec;
 
-	zabbix_log(LOG_LEVEL_DEBUG, "In main_dbsyncer_analyzer_uptime_loop() process_num:%d", process_num);
+	zabbix_log(LOG_LEVEL_DEBUG, "In main_dbsyncer_analyzer_loop() process_num:%d", process_num);
 	
     zbx_setproctitle("%s [connecting to 0mq queue]", get_process_type_string(process_type));
     
@@ -199,9 +199,9 @@ void main_dbsyncer_analyzer_uptime_loop()
 		sec = zbx_time();
         
 #ifdef HAVE_QUEUE
-        DCmass_flush_analyzer_uptime(&qctx);
+        DCmass_flush_analyzer(&qctx);
 #else
-        DCmass_flush_analyzer_uptime();
+        DCmass_flush_analyzer();
 #endif
 
         sec = zbx_time() - sec;

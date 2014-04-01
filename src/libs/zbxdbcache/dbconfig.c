@@ -4956,7 +4956,7 @@ int DChas_triggers(zbx_uint64_t itemid) {
     return triggers;
 }
 
-int DCis_uptime(zbx_uint64_t itemid) {
+int DCis_avail_uptime(zbx_uint64_t itemid) {
     ZBX_DC_ITEM *item;
     int result = 0;
     
@@ -4965,8 +4965,27 @@ int DCis_uptime(zbx_uint64_t itemid) {
     item = zbx_hashset_search(&config->items, &itemid);
     if (NULL != item && (0 == strcmp("system.uptime", item->key)))
         result = 1;
+    else if (NULL != item && (ZBX_FLAG_AVAIL_UPTIME == (ZBX_FLAG_AVAIL_UPTIME & item->flags)))
+        result = 1;
     
     UNLOCK_CACHE;
     
     return result;
 }
+
+int DCis_avail_ping(zbx_uint64_t itemid) {
+    ZBX_DC_ITEM *item;
+    int result = 0;
+    
+    LOCK_CACHE;
+    
+    item = zbx_hashset_search(&config->items, &itemid);
+
+    if (NULL != item && (ZBX_FLAG_AVAIL_PING == (ZBX_FLAG_AVAIL_PING & item->flags)))
+        result = 1;
+
+    UNLOCK_CACHE;
+
+    return result;
+}
+
