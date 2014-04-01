@@ -476,8 +476,8 @@ int	set_result_type(AGENT_RESULT *result, int value_type, int data_type, char *c
 			}
 			break;
 		case ITEM_VALUE_TYPE_FLOAT:
-			zbx_rtrim(c, " \"");
-			zbx_ltrim(c, " \"+");
+			zbx_rtrim(c, " \"\n\r\t");
+			zbx_ltrim(c, " \"+\n\r\t");
 
 			if (SUCCEED != is_double(c))
 				break;
