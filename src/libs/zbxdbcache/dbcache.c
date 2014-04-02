@@ -82,8 +82,8 @@ static int ZBX_ANALYZER_AVAIL_Q_SIZE = 0;
 
 #define ZBX_IDS_SIZE	10
 
-// static int ANALYZER_AVAIL_INTERVAL = SEC_PER_HOUR;
-static int ANALYZER_AVAIL_INTERVAL = 300;
+static int ANALYZER_AVAIL_INTERVAL = SEC_PER_HOUR;
+// static int ANALYZER_AVAIL_INTERVAL = 300;
 static int ANALYZER_AVAIL_PING_FREQ = 90;
 
 typedef struct
