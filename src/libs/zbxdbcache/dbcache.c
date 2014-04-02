@@ -1151,6 +1151,14 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 
 #ifdef HAVE_QUEUE
 static void metric_to_avail(char* metric, char* name, char* buf) {
+    if (strcmp("system.uptime", metric) == 0) {
+        memcpy(buf, metric, strlen(metric));
+        memcpy(buf + strlen(metric), ".availability.", 14);
+        memcpy(buf + strlen(metric) + 14, name, strlen(name));
+        buf[strlen(metric) + 14 + strlen(name)] = '\0';
+        return;
+    }
+    
     int n;
     char* p = strchr(metric, '[');
     if (p != NULL) {
