@@ -1153,9 +1153,10 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 static void metric_to_avail(char* metric, char* name, char* buf) {
     if (strcmp("system.uptime", metric) == 0) {
         memcpy(buf, metric, strlen(metric));
-        memcpy(buf + strlen(metric), ".availability.", 14);
+        memcpy(buf + strlen(metric), ".availability[", 14);
         memcpy(buf + strlen(metric) + 14, name, strlen(name));
-        buf[strlen(metric) + 14 + strlen(name)] = '\0';
+        buf[strlen(metric) + 14 + strlen(name)] = ']';
+        buf[strlen(metric) + 14 + strlen(name) + 1] = '\0';
         return;
     }
     
@@ -3529,9 +3530,9 @@ static void	init_analyzer_cache()
 	}
 
 	sz = zbx_mem_required_size(CONFIG_ANALYZER_AVAIL_UPTIMES_CACHE_SIZE, 1,
-            "analyzer avail uptimes cache", "AnalyzerUptimeCacheSize");
+            "analyzer avail uptimes cache", "AnalyzerAvailUptimeCacheSize");
 	zbx_mem_create(&analyzer_avail_uptimes_mem, analyzer_avail_uptimes_shm_key, ZBX_NO_MUTEX, sz,
-            "analyzer avail uptimes cache", "AnalyzerUptimeCacheSize");
+            "analyzer avail uptimes cache", "AnalyzerAvailUptimeCacheSize");
 
 #define INIT_HASHSET_SIZE	100
 
@@ -3543,9 +3544,9 @@ static void	init_analyzer_cache()
 #undef INIT_HASHSET_SIZE
 
 	sz = zbx_mem_required_size(CONFIG_ANALYZER_AVAIL_PINGS_CACHE_SIZE, 1,
-            "analyzer avail pings cache", "AnalyzerPingsCacheSize");
+            "analyzer avail pings cache", "AnalyzerAvailPingsCacheSize");
 	zbx_mem_create(&analyzer_avail_pings_mem, analyzer_avail_pings_shm_key, ZBX_NO_MUTEX, sz,
-            "analyzer avail pings cache", "AnalyzerPingsCacheSize");
+            "analyzer avail pings cache", "AnalyzerAvailPingsCacheSize");
 
 #define INIT_HASHSET_SIZE	100
 
