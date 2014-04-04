@@ -82,8 +82,6 @@ static int ZBX_ANALYZER_AVAIL_Q_SIZE = 0;
 
 #define ZBX_IDS_SIZE	10
 
-// static int ANALYZER_AVAIL_INTERVAL = SEC_PER_HOUR;
-static int ANALYZER_AVAIL_INTERVAL = 300;
 static int ANALYZER_AVAIL_PING_FREQ = 90;
 
 typedef struct
@@ -157,10 +155,11 @@ ZBX_DC_ANALYZER_AVAIL;
 typedef struct
 {
     zbx_uint64_t itemid;
-    double value;
+    double value_time;
+    double value_percent;
     int clock;
 }
-ZBX_DC_ANALYZER_METRIC;
+ZBX_DC_ANALYZER_AVAIL_METRIC;
 
 typedef struct
 {
@@ -193,7 +192,7 @@ typedef struct
     int trends_num_db;
     zbx_hashset_t analyzer_avail_uptimes;
     zbx_hashset_t analyzer_avail_pings;
-    ZBX_DC_ANALYZER_METRIC *analyzer_avail_q;
+    ZBX_DC_ANALYZER_AVAIL_METRIC *analyzer_avail_q;
     int analyzer_avail_q_num;
 }
 ZBX_DC_CACHE;
@@ -804,7 +803,7 @@ static void	DCmass_update_trends(ZBX_DC_HISTORY *history, int history_num)
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
-static void analyzer_avail_queue(ZBX_DC_ANALYZER_AVAIL *avail) {
+static void analyzer_avail_queue(ZBX_DC_ANALYZER_AVAIL *avail, int interval) {
     // if analyzer queue is full wait for free space
     while(cache->analyzer_avail_q_num == ZBX_ANALYZER_AVAIL_Q_SIZE) {
         UNLOCK_ANALYZER_AVAIL_Q;
@@ -815,7 +814,9 @@ static void analyzer_avail_queue(ZBX_DC_ANALYZER_AVAIL *avail) {
     }
     
     cache->analyzer_avail_q[cache->analyzer_avail_q_num].itemid = avail->itemid;
-    cache->analyzer_avail_q[cache->analyzer_avail_q_num].value = avail->h[avail->prev].avail;
+    cache->analyzer_avail_q[cache->analyzer_avail_q_num].value_time = avail->h[avail->prev].avail;
+    cache->analyzer_avail_q[cache->analyzer_avail_q_num].value_percent =
+        (avail->h[avail->prev].avail * 100.0) / interval;
     cache->analyzer_avail_q[cache->analyzer_avail_q_num].clock = avail->h[avail->prev].clock;
     cache->analyzer_avail_q_num++;
     
@@ -825,7 +826,7 @@ static void analyzer_avail_queue(ZBX_DC_ANALYZER_AVAIL *avail) {
 }
 
 static void analyzer_avail_process_pings(
-        ZBX_DC_HISTORY *history, zbx_hashset_t *analyzer_avail_pings) {
+        ZBX_DC_HISTORY *history, zbx_hashset_t *analyzer_avail_pings, int interval) {
 
     ZBX_DC_ANALYZER_AVAIL *avail, *avail_tmp;
     int interval_start, prev_interval_end;
@@ -858,7 +859,7 @@ static void analyzer_avail_process_pings(
             return;
     }
 
-	interval_start = history->clock - (history->clock % ANALYZER_AVAIL_INTERVAL);
+	interval_start = history->clock - (history->clock % interval);
     prev_interval_end = interval_start - 1;
 
     // new hour
@@ -872,7 +873,7 @@ static void analyzer_avail_process_pings(
                 avail->itemid, avail->h[avail->prev].clock, avail->h[avail->prev].progress,
                 avail->h[avail->prev].avail);
             LOCK_ANALYZER_AVAIL_Q;
-            analyzer_avail_queue(avail);
+            analyzer_avail_queue(avail, interval);
             UNLOCK_ANALYZER_AVAIL_Q;
         }
 
@@ -897,7 +898,7 @@ static void analyzer_avail_process_pings(
     }
     
     // how previous interval should have ended
-    prev_interval_end = avail->h[avail->prev].clock + ANALYZER_AVAIL_INTERVAL - 1;
+    prev_interval_end = avail->h[avail->prev].clock + interval - 1;
     
     // previous hour not finished
     if (avail->h[avail->prev].progress != 0
@@ -928,7 +929,7 @@ static void analyzer_avail_process_pings(
 }
 
 static void analyzer_avail_process_uptimes(
-        ZBX_DC_HISTORY *history, zbx_hashset_t *analyzer_avail_uptimes) {
+        ZBX_DC_HISTORY *history, zbx_hashset_t *analyzer_avail_uptimes, int interval) {
 
     ZBX_DC_ANALYZER_AVAIL *uptime, *uptime_tmp;
     int interval_start, prev_interval_end;
@@ -961,7 +962,7 @@ static void analyzer_avail_process_uptimes(
             return;
     }
 
-	interval_start = history->clock - (history->clock % ANALYZER_AVAIL_INTERVAL);
+	interval_start = history->clock - (history->clock % interval);
     prev_interval_end = interval_start - 1;
     
     switch (history->value_type)
@@ -992,7 +993,7 @@ static void analyzer_avail_process_uptimes(
                 uptime->itemid, uptime->h[uptime->prev].clock, uptime->h[uptime->prev].progress,
                 uptime->h[uptime->prev].avail);
             LOCK_ANALYZER_AVAIL_Q;
-            analyzer_avail_queue(uptime);
+            analyzer_avail_queue(uptime, interval);
             UNLOCK_ANALYZER_AVAIL_Q;
         }
 
@@ -1019,7 +1020,7 @@ static void analyzer_avail_process_uptimes(
     }
     
     // how previous interval should have ended
-    prev_interval_end = uptime->h[uptime->prev].clock + ANALYZER_AVAIL_INTERVAL - 1;
+    prev_interval_end = uptime->h[uptime->prev].clock + interval - 1;
     
     // previous hour not finished
     if (uptime->h[uptime->prev].progress != 0
@@ -1076,10 +1077,11 @@ static void analyzer_avail_process_uptimes(
     uptime->clock_last = history->clock;
 }
 
-static void analyzer_avail_check(zbx_hashset_t *analyzer_avail) {
+static void analyzer_avail_check(zbx_hashset_t *analyzer_avail, int interval) {
     zbx_hashset_iter_t	iter;
     ZBX_DC_ANALYZER_AVAIL *avail;
     time_t now;
+    int obsolete_interval = 4 * interval;
 
     LOCK_ANALYZER_AVAIL_Q;
     
@@ -1094,19 +1096,19 @@ static void analyzer_avail_check(zbx_hashset_t *analyzer_avail) {
                 avail->itemid, avail->h[avail->prev].clock, avail->h[avail->prev].progress,
                 avail->h[avail->prev].avail);
 
-            if (avail->h[avail->prev].avail > ANALYZER_AVAIL_INTERVAL) {
+            if (avail->h[avail->prev].avail > interval) {
                 zabbix_log(LOG_LEVEL_INFORMATION,
                         "[ANALYZER/AVAIL] avail exceeds interval - fixing, "
                         "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f",
                         avail->itemid, avail->h[avail->prev].clock, avail->h[avail->prev].progress,
                         avail->h[avail->prev].avail);
-                avail->h[avail->prev].avail = ANALYZER_AVAIL_INTERVAL;
+                avail->h[avail->prev].avail = interval;
             }
             
-            analyzer_avail_queue(avail);
+            analyzer_avail_queue(avail, interval);
         } else if (
-            (avail->h[avail->curr].clock != 0 && avail->h[avail->curr].clock < now - 86400) ||
-            (avail->h[avail->prev].clock != 0 && avail->h[avail->prev].clock < now - 86400))
+            (avail->h[avail->curr].clock != 0 && avail->h[avail->curr].clock < now - obsolete_interval) ||
+            (avail->h[avail->prev].clock != 0 && avail->h[avail->prev].clock < now - obsolete_interval))
         {
             zabbix_log(LOG_LEVEL_INFORMATION,
                 "[ANALYZER/AVAIL] dropping obsolete entry, "
@@ -1130,20 +1132,20 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 
 	for (i = 0; i < history_num; i++) {
         LOCK_ANALYZER_AVAIL_UPTIMES;
-		analyzer_avail_process_uptimes(&history[i], &cache->analyzer_avail_uptimes);
+		analyzer_avail_process_uptimes(&history[i], &cache->analyzer_avail_uptimes, 3600);
         UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
         LOCK_ANALYZER_AVAIL_PINGS;
-		analyzer_avail_process_pings(&history[i], &cache->analyzer_avail_pings);
+		analyzer_avail_process_pings(&history[i], &cache->analyzer_avail_pings, 3600);
         UNLOCK_ANALYZER_AVAIL_PINGS;
 	}
     
 	LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_check(&cache->analyzer_avail_uptimes);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes, 3600);
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
 	LOCK_ANALYZER_AVAIL_PINGS;
-    analyzer_avail_check(&cache->analyzer_avail_pings);
+    analyzer_avail_check(&cache->analyzer_avail_pings, 3600);
     UNLOCK_ANALYZER_AVAIL_PINGS;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
@@ -1175,15 +1177,16 @@ static void metric_to_avail(char* metric, char* name, char* buf) {
     buf[strlen(metric) + 7 + strlen(name)] = '\0';
 }
 
-static void analyzer_avail_to_json(struct zbx_json *j, ZBX_DC_ANALYZER_METRIC *uptimes, int uptimes_num) {
+static void analyzer_avail_to_json(struct zbx_json *j,
+        ZBX_DC_ANALYZER_AVAIL_METRIC *avails, int avails_num) {
+
     const size_t BUF_SIZE = 300; // db items.key_ column is varchar(255)
     char buf[BUF_SIZE];
-    ZBX_DC_ANALYZER_METRIC *uptime = NULL;
+    ZBX_DC_ANALYZER_AVAIL_METRIC *avail = NULL;
     size_t sql_offset = 0;
     DB_RESULT result;
 	DB_ROW item_row;
     int i;
-    double percent;
     char* p;
     int n;
      
@@ -1194,43 +1197,40 @@ static void analyzer_avail_to_json(struct zbx_json *j, ZBX_DC_ANALYZER_METRIC *u
         
     zbx_json_addarray(j, ZBX_PROTO_TAG_DATA);
     
-	for (i = 0; i < uptimes_num; i++) {
-		uptime = &uptimes[i];
+	for (i = 0; i < avails_num; i++) {
+		avail = &avails[i];
         
         // TODO consider querying cache
         sql_offset = 0;
         zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
             "SELECT h.host, i.key_ "
             "FROM items as i LEFT JOIN (hosts as h) ON (i.hostid=h.hostid) "
-            "WHERE i.itemid=%d LIMIT 1", uptime->itemid);
+            "WHERE i.itemid=%d LIMIT 1", avail->itemid);
         result = DBselect("%s", sql);
         item_row = DBfetch(result);
         if (item_row == NULL) {
-            zabbix_log(LOG_LEVEL_ERR, "Unable to get item by id: %d", uptime->itemid);
+            zabbix_log(LOG_LEVEL_ERR, "Unable to get item by id: %d", avail->itemid);
             continue;
         }
         
         zbx_json_addobject(j, NULL);
         
-        zbx_snprintf(buf, BUF_SIZE, "%f", uptime->value);
+        zbx_snprintf(buf, BUF_SIZE, "%f", avail->value_time);
         zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
         
         metric_to_avail(item_row[1], "second", buf);
         zabbix_log(LOG_LEVEL_ERR, "avail item: %s", buf);
         zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, buf, ZBX_JSON_TYPE_STRING);
-
         zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item_row[0], ZBX_JSON_TYPE_STRING);
         
-        zbx_snprintf(buf, BUF_SIZE, "%d", uptime->clock);
+        zbx_snprintf(buf, BUF_SIZE, "%d", avail->clock);
         zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
         
         zbx_json_close(j);
 
-        
-        percent = (uptime->value * 100.0) / ANALYZER_AVAIL_INTERVAL;
-        zbx_snprintf(buf, BUF_SIZE, "%f", percent);
         zbx_json_addobject(j, NULL);
         
+        zbx_snprintf(buf, BUF_SIZE, "%f", avail->value_percent);
         zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
         
         metric_to_avail(item_row[1], "percent", buf);
@@ -1240,7 +1240,7 @@ static void analyzer_avail_to_json(struct zbx_json *j, ZBX_DC_ANALYZER_METRIC *u
         
         DBfree_result(result);
         
-        zbx_snprintf(buf, BUF_SIZE, "%d", uptime->clock);
+        zbx_snprintf(buf, BUF_SIZE, "%d", avail->clock);
         zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
         
         zbx_json_close(j);
@@ -1255,7 +1255,7 @@ void DCmass_flush_analyzer(struct queue_ctx* qctx) {
 void DCmass_flush_analyzer() {
 #endif
 
-    ZBX_DC_ANALYZER_METRIC *analyzer_metrics = NULL;
+    ZBX_DC_ANALYZER_AVAIL_METRIC *analyzer_metrics = NULL;
     int analyzer_metrics_num = 0;
     struct zbx_json j;
     struct zbx_json_parse jp;
@@ -1274,7 +1274,7 @@ void DCmass_flush_analyzer() {
     if (0 < cache->analyzer_avail_q_num) {
         analyzer_metrics_num = cache->analyzer_avail_q_num < BATCH_MAX_SIZE
             ? cache->analyzer_avail_q_num : BATCH_MAX_SIZE;
-        analyzer_metrics = zbx_malloc(analyzer_metrics, analyzer_metrics_num * sizeof(ZBX_DC_ANALYZER_METRIC));
+        analyzer_metrics = zbx_malloc(analyzer_metrics, analyzer_metrics_num * sizeof(ZBX_DC_ANALYZER_AVAIL_METRIC));
         i = 0;
         while (0 < cache->analyzer_avail_q_num && i < BATCH_MAX_SIZE) {
             analyzer_metrics[analyzer_metrics_num - 1 - i] =
@@ -3607,7 +3607,7 @@ void	init_database_cache()
 
 	ZBX_HISTORY_SIZE = CONFIG_HISTORY_CACHE_SIZE / sizeof(ZBX_DC_HISTORY);
     ZBX_TRENDS_DB_SIZE = CONFIG_TRENDS_DB_CACHE_SIZE / sizeof(ZBX_DC_TREND);
-    ZBX_ANALYZER_AVAIL_Q_SIZE = CONFIG_ANALYZER_AVAIL_Q_CACHE_SIZE / sizeof(ZBX_DC_ANALYZER_METRIC);
+    ZBX_ANALYZER_AVAIL_Q_SIZE = CONFIG_ANALYZER_AVAIL_Q_CACHE_SIZE / sizeof(ZBX_DC_ANALYZER_AVAIL_METRIC);
 	if (ZBX_SYNC_MAX > ZBX_HISTORY_SIZE)
 		ZBX_SYNC_MAX = ZBX_HISTORY_SIZE;
 	ZBX_ITEMIDS_SIZE = CONFIG_HISTSYNCER_FORKS * ZBX_SYNC_MAX;
@@ -3617,7 +3617,7 @@ void	init_database_cache()
 	sz = sizeof(ZBX_DC_CACHE);
 	sz += ZBX_HISTORY_SIZE * sizeof(ZBX_DC_HISTORY);
     sz += ZBX_TRENDS_DB_SIZE * sizeof(ZBX_DC_TREND);
-    sz += ZBX_ANALYZER_AVAIL_Q_SIZE * sizeof(ZBX_DC_ANALYZER_METRIC);
+    sz += ZBX_ANALYZER_AVAIL_Q_SIZE * sizeof(ZBX_DC_ANALYZER_AVAIL_METRIC);
 	sz += ZBX_ITEMIDS_SIZE * sizeof(zbx_uint64_t);
 	sz += sizeof(ZBX_DC_IDS);
 	sz = zbx_mem_required_size(sz, 4, "history cache", "HistoryCacheSize");
@@ -3634,7 +3634,7 @@ void	init_database_cache()
 	cache->itemids_num = 0;
     cache->trends_db = (ZBX_DC_TREND *)__history_mem_malloc_func(NULL, ZBX_TRENDS_DB_SIZE * sizeof(ZBX_DC_TREND));
     cache->trends_num_db = 0;
-    cache->analyzer_avail_q = (ZBX_DC_ANALYZER_METRIC *)__history_mem_malloc_func(NULL, ZBX_ANALYZER_AVAIL_Q_SIZE * sizeof(ZBX_DC_ANALYZER_METRIC));
+    cache->analyzer_avail_q = (ZBX_DC_ANALYZER_AVAIL_METRIC *)__history_mem_malloc_func(NULL, ZBX_ANALYZER_AVAIL_Q_SIZE * sizeof(ZBX_DC_ANALYZER_AVAIL_METRIC));
     cache->analyzer_avail_q_num = 0;
 	memset(&cache->stats, 0, sizeof(ZBX_DC_STATS));
 
@@ -3683,8 +3683,8 @@ static void	DCsync_all()
 	if (CONFIG_TRENDS_SQL_WRITE && 0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER))
 		DCsync_trends();
     
-    analyzer_avail_check(&cache->analyzer_avail_uptimes);
-    analyzer_avail_check(&cache->analyzer_avail_pings);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes, 3600);
+    analyzer_avail_check(&cache->analyzer_avail_pings, 3600);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of DCsync_all()");
 }
