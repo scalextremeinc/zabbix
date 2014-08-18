@@ -151,7 +151,7 @@ typedef struct
     int progress;
 	int clock;
 }
-ZBX_DC_ANALYZER_AVAIL_HOUR;
+ZBX_DC_ANALYZER_AVAIL_VALUE;
 
 typedef struct
 {
@@ -160,7 +160,7 @@ typedef struct
     int clock_last;
     int curr;
     int prev;
-    ZBX_DC_ANALYZER_AVAIL_HOUR h[2];
+    ZBX_DC_ANALYZER_AVAIL_VALUE h[2];
 }
 ZBX_DC_ANALYZER_AVAIL;
 
@@ -863,13 +863,17 @@ static void analyzer_avail_process_pings(
             
             avail = zbx_hashset_insert(analyzer_avail_pings, avail_tmp, sizeof(ZBX_DC_ANALYZER_AVAIL));
             free(avail_tmp);
-
+            if (NULL == avail) {
+                zabbix_log(LOG_LEVEL_INFORMATION, 
+                        "[ANALYZER/PING%d] failed creating new avail pign, itemid: "
+                        ZBX_FS_UI64, interval, history->itemid);
+                return;
+            }
             zabbix_log(LOG_LEVEL_INFORMATION, 
-            "[ANALYZER/PING%d] item added, itemid: " ZBX_FS_UI64, interval, history->itemid);
-
-        }
-        if (NULL == avail)
+                    "[ANALYZER/PING%d] item added, itemid: " ZBX_FS_UI64, interval, history->itemid);
+        } else {
             return;
+        }
     }
 
 	interval_start = history->clock - (history->clock % interval);
@@ -967,13 +971,19 @@ static void analyzer_avail_process_uptimes(
             
             uptime = zbx_hashset_insert(analyzer_avail_uptimes, uptime_tmp, sizeof(ZBX_DC_ANALYZER_AVAIL));
             free(uptime_tmp);
+            if (NULL == uptime) {
+                zabbix_log(LOG_LEVEL_INFORMATION, 
+                    "[ANALYZER/UPTIME%d] failed crateing new avail uptime, itemid: " ZBX_FS_UI64,
+                    interval, history->itemid);
+                return;
+            }
 
             zabbix_log(LOG_LEVEL_INFORMATION, 
                 "[ANALYZER/UPTIME%d] item added, itemid: " ZBX_FS_UI64,
                 interval, history->itemid);
-        }
-        if (NULL == uptime)
+        } else {
             return;
+        }
     }
 
 	interval_start = history->clock - (history->clock % interval);
@@ -1074,9 +1084,6 @@ static void analyzer_avail_process_uptimes(
     
     // machine was down
     if (history_uptime < uptime->value_last) {
-        int avail = uptime->clock_last - (uptime->h[uptime->curr].progress - 1);
-        
-        uptime->h[uptime->curr].avail += avail;
         uptime->h[uptime->curr].progress = history->clock;
         
         zabbix_log(LOG_LEVEL_INFORMATION,
@@ -1085,6 +1092,10 @@ static void analyzer_avail_process_uptimes(
             ZBX_FS_UI64 ", clock: %d", interval,
             uptime->itemid, uptime->h[uptime->curr].clock, uptime->h[uptime->curr].progress,
             uptime->h[uptime->curr].avail, history_uptime, history->clock);
+    } else {
+        int avail = history->clock - (uptime->h[uptime->curr].progress - 1);
+        uptime->h[uptime->curr].avail += avail;
+        uptime->h[uptime->curr].progress = history->clock;
     }
     
     uptime->value_last = history_uptime;
@@ -1111,13 +1122,17 @@ static void analyzer_avail_store(zbx_hashset_t *analyzer_avail, int fd) {
 }
 
 static void analyzer_avail_store_check(zbx_hashset_t *analyzer_avail, int interval,
-        time_t now, time_t write_interval, time_t write_shift) {
+        time_t write_interval, char* name) {
 
     int fd;
+    time_t now;
     struct stat stat_result;
     char buf[1024];
 
-    zbx_snprintf(buf, 1024, "%s/zabbix-analyzer-avail-%d", CONFIG_ANALYZER_AVAIL_DIR, interval);
+    now = time(NULL);
+
+    zbx_snprintf(buf, 1024, "%s/zabbix-analyzer-avail-%s-%d",
+            CONFIG_ANALYZER_AVAIL_DIR, name, interval);
 
     if ((fd = open(buf, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1) {
         zabbix_log(LOG_LEVEL_ERR, "Error opening avail store, file: %s, error: %s",
@@ -1132,6 +1147,11 @@ static void analyzer_avail_store_check(zbx_hashset_t *analyzer_avail, int interv
 
     if (stat_result.st_mtime + write_interval < now) {
         analyzer_avail_store(analyzer_avail, fd);
+    }
+
+    if (close(fd) != 0) {
+        zabbix_log(LOG_LEVEL_ERR, "Error closing avail store, file: %s, error: %s",
+            buf, strerror(errno));
     }
 }
 
@@ -1226,6 +1246,27 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
     analyzer_avail_check(&cache->analyzer_avail_pings_24h, 86400);
     UNLOCK_ANALYZER_AVAIL_PINGS_24H;
 
+
+    LOCK_ANALYZER_AVAIL_UPTIMES;
+    analyzer_avail_store_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_DEFAULT_INTERVAL,
+            60, "uptime");
+    UNLOCK_ANALYZER_AVAIL_UPTIMES;
+
+    LOCK_ANALYZER_AVAIL_UPTIMES;
+    analyzer_avail_store_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_DEFAULT_INTERVAL,
+            60, "ping");
+    UNLOCK_ANALYZER_AVAIL_UPTIMES;
+
+    LOCK_ANALYZER_AVAIL_UPTIMES;
+    analyzer_avail_store_check(&cache->analyzer_avail_uptimes_24h, ANALYZER_AVAIL_DEFAULT_INTERVAL,
+            120, "uptime");
+    UNLOCK_ANALYZER_AVAIL_UPTIMES;
+
+    LOCK_ANALYZER_AVAIL_UPTIMES;
+    analyzer_avail_store_check(&cache->analyzer_avail_pings_24h, ANALYZER_AVAIL_DEFAULT_INTERVAL,
+            120, "ping");
+    UNLOCK_ANALYZER_AVAIL_UPTIMES;
+
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
 
@@ -1283,8 +1324,8 @@ static void analyzer_avail_to_json(struct zbx_json *j,
      
     zbx_json_init(j, ZBX_JSON_STAT_BUF_LEN);
     
-    // this is information for worker where to store this data
-    //zbx_json_addstring(j, "target", "trends", ZBX_JSON_TYPE_STRING);
+    // this is information for worker where to store this data (it goes to nosql tsdb)
+    zbx_json_addstring(j, "target", "trends", ZBX_JSON_TYPE_STRING);
         
     zbx_json_addarray(j, ZBX_PROTO_TAG_DATA);
     
@@ -1415,7 +1456,7 @@ static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_
      
     zbx_json_init(j, ZBX_JSON_STAT_BUF_LEN);
     
-    // this is information for worker where to store this data
+    // this is information for worker where to store this data (it goes to nosql tsdb)
     zbx_json_addstring(j, "target", "trends", ZBX_JSON_TYPE_STRING);
         
     zbx_json_addarray(j, ZBX_PROTO_TAG_DATA);
