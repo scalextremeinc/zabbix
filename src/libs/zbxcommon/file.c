@@ -134,3 +134,28 @@ int	zbx_is_regular_file(const char *path)
 
 	return FAIL;
 }
+
+ssize_t zbx_write_all(int fd, const void* buf, size_t count) {
+    size_t left = count;
+    while (left > 0) {
+        size_t n = write(fd, buf, count);
+        if (n == -1)
+            return -1;
+        else
+            left -= n;
+    }
+    return count;
+}
+
+ssize_t zbx_read_all(int fd, void* buf, size_t count) {
+    size_t left = count;
+    while (left > 0) {
+        size_t n = read(fd, buf, count);    
+        if (n == -1)
+            return -1;
+        else
+            left -= n;
+    }
+    return count;
+}
+
