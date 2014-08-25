@@ -91,8 +91,8 @@ static int ZBX_ANALYZER_AVAIL_Q_SIZE = 0;
 
 #define ZBX_IDS_SIZE	10
 
-// static int ANALYZER_AVAIL_DEFAULT_INTERVAL = SEC_PER_HOUR;
-static int ANALYZER_AVAIL_DEFAULT_INTERVAL = 300;
+static int ANALYZER_AVAIL_DEFAULT_INTERVAL = SEC_PER_HOUR;
+// static int ANALYZER_AVAIL_DEFAULT_INTERVAL = 300;
 
 static int ANALYZER_AVAIL_PING_FREQ = 90;
 
@@ -1111,10 +1111,10 @@ static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, cha
     size_t avail_size;
     size_t count = 0;
 
-    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Loading availability from disk");
 
     zbx_snprintf(buf, 1024, "%s/zabbix-analyzer-avail-%s-%d",
             CONFIG_ANALYZER_AVAIL_DIR, name, interval);
+    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Loading availability from disk, file: %s", buf);
     if ((fd = open(buf, O_RDONLY)) == -1) {
         zabbix_log(LOG_LEVEL_ERR, "Error opening avail store, file: %s, error: %s",
             buf, strerror(errno));
@@ -1172,6 +1172,7 @@ static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, cha
         count++;
     }
     zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Loaded availability, count: %d", count);
+    return;
 
 error_read:
     free(avail);
@@ -1183,8 +1184,6 @@ static void analyzer_avail_store(zbx_hashset_t *analyzer_avail, int fd) {
     zbx_hashset_iter_t	iter;
     ZBX_DC_ANALYZER_AVAIL *avail;
     size_t count = 0;
-
-    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Storing availability to disk");
 
 	zbx_hashset_iter_reset(analyzer_avail, &iter);
 	while (NULL != (avail = (ZBX_DC_ANALYZER_AVAIL *) zbx_hashset_iter_next(&iter))) {
@@ -1217,6 +1216,7 @@ static void analyzer_avail_store(zbx_hashset_t *analyzer_avail, int fd) {
         count++;
     }
     zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Stored availability, count: %d", count);
+    return;
 
 error_write:
     zabbix_log(LOG_LEVEL_ERR, "Error writing to avail store, error: %s", strerror(errno));
@@ -1248,6 +1248,7 @@ static void analyzer_avail_store_check(zbx_hashset_t *analyzer_avail, int interv
     }
 
     if (stat_result.st_mtime + write_interval < now) {
+        zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Storing availability to disk, file: %s", buf);
         analyzer_avail_store(analyzer_avail, fd);
     }
 
@@ -1374,35 +1375,39 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 
 static void analyzer_avail_load_all() {
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_load(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_DEFAULT_INTERVAL, "uptime");
+    if (cache->analyzer_avail_uptimes.num_data == 0)
+        analyzer_avail_load(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_DEFAULT_INTERVAL, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_load(&cache->analyzer_avail_pings, ANALYZER_AVAIL_DEFAULT_INTERVAL, "ping");
+    if (cache->analyzer_avail_pings.num_data == 0)
+        analyzer_avail_load(&cache->analyzer_avail_pings, ANALYZER_AVAIL_DEFAULT_INTERVAL, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     // 24 h
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_load(&cache->analyzer_avail_uptimes_24h, 86400, "uptime");
+    if (cache->analyzer_avail_uptimes_24h.num_data == 0)
+        analyzer_avail_load(&cache->analyzer_avail_uptimes_24h, 86400, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_load(&cache->analyzer_avail_pings_24h, 86400, "ping");
+    if (cache->analyzer_avail_pings_24h.num_data == 0)
+        analyzer_avail_load(&cache->analyzer_avail_pings_24h, 86400, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 }
 
 #ifdef HAVE_QUEUE
 static void metric_to_avail(char* metric, char* name, int interval, char* buf) {
-    int len;
+    int len = 0;
     if (strcmp("system.uptime", metric) == 0) {
         memcpy(buf, metric, strlen(metric));
-        memcpy(buf + strlen(metric), ".availability", 14);
+        memcpy(buf + strlen(metric), ".availability", 13);
         if (interval != ANALYZER_AVAIL_DEFAULT_INTERVAL) {
-            len = zbx_snprintf(buf + 14, 32, "%d", interval);
+            len = zbx_snprintf(buf + 13, 32, "%d", interval);
         }
-        memcpy(buf + strlen(metric) + 14 + len, name, strlen(name));
-        buf[strlen(metric) + 14 + len + strlen(name)] = '\0';
+        memcpy(buf + strlen(metric) + 13 + len, name, strlen(name));
+        buf[strlen(metric) + 13 + len + strlen(name)] = '\0';
         return;
     }
     
@@ -1520,7 +1525,7 @@ void DCmass_flush_analyzer() {
 
     sec = zbx_time();
     char *process_type_str = get_process_type_string(process_type);
-    
+
     LOCK_ANALYZER_AVAIL_Q;
     
     zabbix_log(LOG_LEVEL_INFORMATION, 
