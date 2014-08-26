@@ -1250,6 +1250,10 @@ static void analyzer_avail_store_check(zbx_hashset_t *analyzer_avail, int interv
     if (stat_result.st_mtime + write_interval < now) {
         zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Storing availability to disk, file: %s", buf);
         analyzer_avail_store(analyzer_avail, fd);
+        // update file mtime, if there are no avails this prevents trying to store too often
+        if (utime(fd, NULL) == -1)
+            zabbix_log(LOG_LEVEL_ERR, "Error changing file mtime, file: %s, error: %s",
+                    buf, strerror(errno));
     }
 
     if (close(fd) != 0) {
