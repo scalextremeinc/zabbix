@@ -1406,10 +1406,11 @@ static void metric_to_avail(char* metric, char* name, int interval, char* buf) {
     int len = 0;
     if (strcmp("system.uptime", metric) == 0) {
         memcpy(buf, metric, strlen(metric));
-        memcpy(buf + strlen(metric), ".availability[", 14);
+        memcpy(buf + strlen(metric), ".availability", 13);
         if (interval != ANALYZER_AVAIL_DEFAULT_INTERVAL) {
-            len = zbx_snprintf(buf + strlen(metric) + 14, 32, "%d", interval);
+            len = zbx_snprintf(buf + strlen(metric) + 13, 32, "%d", interval);
         }
+        buf[strlen(metric) + 13 + len] = '[';
         memcpy(buf + strlen(metric) + 14 + len, name, strlen(name));
         buf[strlen(metric) + 14 + len + strlen(name)] = ']';
         buf[strlen(metric) + 14 + len + strlen(name) + 1] = '\0';
