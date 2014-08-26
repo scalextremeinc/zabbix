@@ -1458,7 +1458,7 @@ static void analyzer_avail_to_json(struct zbx_json *j,
     zbx_json_init(j, ZBX_JSON_STAT_BUF_LEN);
     
     // this is information for worker where to store this data (it goes to nosql tsdb)
-    zbx_json_addstring(j, "target", "trends", ZBX_JSON_TYPE_STRING);
+    // zbx_json_addstring(j, "target", "trends", ZBX_JSON_TYPE_STRING);
         
     zbx_json_addarray(j, ZBX_PROTO_TAG_DATA);
     
