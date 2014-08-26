@@ -91,8 +91,8 @@ static int ZBX_ANALYZER_AVAIL_Q_SIZE = 0;
 
 #define ZBX_IDS_SIZE	10
 
-static int ANALYZER_AVAIL_DEFAULT_INTERVAL = SEC_PER_HOUR;
-// static int ANALYZER_AVAIL_DEFAULT_INTERVAL = 300;
+// static int ANALYZER_AVAIL_DEFAULT_INTERVAL = SEC_PER_HOUR;
+static int ANALYZER_AVAIL_DEFAULT_INTERVAL = 300;
 
 static int ANALYZER_AVAIL_PING_FREQ = 90;
 
@@ -1425,8 +1425,8 @@ static void metric_to_avail(char* metric, char* name, int interval, char* buf) {
         memcpy(buf + n, ".avail", 6);
         if (interval != ANALYZER_AVAIL_DEFAULT_INTERVAL) {
             len = zbx_snprintf(buf + n + 6, 32, "%d", interval);
-            buf[n + 6 + len] = '.';
         }
+        buf[n + 6 + len] = '.';
         memcpy(buf + n + 7 + len, name, strlen(name));
         memcpy(buf + n + 7 + len + strlen(name), p, strlen(metric) - n);
     } else {
@@ -1434,8 +1434,8 @@ static void metric_to_avail(char* metric, char* name, int interval, char* buf) {
         memcpy(buf + strlen(metric), ".avail", 6);
         if (interval != ANALYZER_AVAIL_DEFAULT_INTERVAL) {
             len = zbx_snprintf(buf + strlen(metric) + 6, 32, "%d", interval);
-            buf[strlen(metric) + 6 + len] = '.';
         }
+        buf[strlen(metric) + 6 + len] = '.';
         memcpy(buf + strlen(metric) + 7 + len, name, strlen(name));
     }
     buf[strlen(metric) + 7 + len + strlen(name)] = '\0';
