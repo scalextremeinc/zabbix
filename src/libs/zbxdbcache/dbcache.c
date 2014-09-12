@@ -91,8 +91,8 @@ static int ZBX_ANALYZER_AVAIL_Q_SIZE = 0;
 
 #define ZBX_IDS_SIZE	10
 
-static int ANALYZER_AVAIL_DEFAULT_INTERVAL = SEC_PER_HOUR;
-// static int ANALYZER_AVAIL_DEFAULT_INTERVAL = 300;
+static int ANALYZER_AVAIL_INTERVAL_1h = 3600;
+static int ANALYZER_AVAIL_INTERVAL_24h = 86400;
 
 static int ANALYZER_AVAIL_PING_FREQ = 90;
 
@@ -865,7 +865,7 @@ static void analyzer_avail_process_pings(
             free(avail_tmp);
             if (NULL == avail) {
                 zabbix_log(LOG_LEVEL_INFORMATION, 
-                        "[ANALYZER/PING%d] failed creating new avail pign, itemid: "
+                        "[ANALYZER/PING%d] failed creating new avail ping, itemid: "
                         ZBX_FS_UI64, interval, history->itemid);
                 return;
             }
@@ -921,7 +921,7 @@ static void analyzer_avail_process_pings(
     if (avail->h[avail->prev].progress != 0
             && avail->h[avail->prev].progress < prev_interval_end) {
         
-        // if last hour ping was not too much in the past
+        // if last hour ping was not too far in the past
         if (avail->h[avail->prev].progress > history->clock - ANALYZER_AVAIL_PING_FREQ)
             avail->h[avail->prev].avail += prev_interval_end - avail->h[avail->prev].progress;
 
@@ -1318,60 +1318,64 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 	for (i = 0; i < history_num; i++) {
         LOCK_ANALYZER_AVAIL_UPTIMES;
 		analyzer_avail_process_uptimes(&history[i], &cache->analyzer_avail_uptimes,
-                ANALYZER_AVAIL_DEFAULT_INTERVAL);
+                ANALYZER_AVAIL_INTERVAL_1h);
         UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
         LOCK_ANALYZER_AVAIL_PINGS;
 		analyzer_avail_process_pings(&history[i], &cache->analyzer_avail_pings,
-                ANALYZER_AVAIL_DEFAULT_INTERVAL);
+                ANALYZER_AVAIL_INTERVAL_1h);
         UNLOCK_ANALYZER_AVAIL_PINGS;
 
         // 24h
         LOCK_ANALYZER_AVAIL_UPTIMES_24H;
-		analyzer_avail_process_uptimes(&history[i], &cache->analyzer_avail_uptimes_24h, 86400);
+		analyzer_avail_process_uptimes(&history[i], &cache->analyzer_avail_uptimes_24h,
+                ANALYZER_AVAIL_INTERVAL_24h);
         UNLOCK_ANALYZER_AVAIL_UPTIMES_24H;
 
         LOCK_ANALYZER_AVAIL_PINGS_24H;
-		analyzer_avail_process_pings(&history[i], &cache->analyzer_avail_pings_24h, 86400);
+		analyzer_avail_process_pings(&history[i], &cache->analyzer_avail_pings_24h,
+                ANALYZER_AVAIL_INTERVAL_24h);
         UNLOCK_ANALYZER_AVAIL_PINGS_24H;
 	}
     
 	LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_DEFAULT_INTERVAL);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL_1h);
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
 	LOCK_ANALYZER_AVAIL_PINGS;
-    analyzer_avail_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_DEFAULT_INTERVAL);
+    analyzer_avail_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL_1h);
     UNLOCK_ANALYZER_AVAIL_PINGS;
 
     // 24h
 
 	LOCK_ANALYZER_AVAIL_UPTIMES_24H;
-    analyzer_avail_check(&cache->analyzer_avail_uptimes_24h, 86400);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes_24h, ANALYZER_AVAIL_INTERVAL_24h);
     UNLOCK_ANALYZER_AVAIL_UPTIMES_24H;
 
 	LOCK_ANALYZER_AVAIL_PINGS_24H;
-    analyzer_avail_check(&cache->analyzer_avail_pings_24h, 86400);
+    analyzer_avail_check(&cache->analyzer_avail_pings_24h, ANALYZER_AVAIL_INTERVAL_24h);
     UNLOCK_ANALYZER_AVAIL_PINGS_24H;
 
     // try storing
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_store_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_DEFAULT_INTERVAL,
+    analyzer_avail_store_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL_1h,
             60, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_store_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_DEFAULT_INTERVAL,
+    analyzer_avail_store_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL_1h,
             60, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_store_check(&cache->analyzer_avail_uptimes_24h, 86400, 120, "uptime");
+    analyzer_avail_store_check(&cache->analyzer_avail_uptimes_24h, ANALYZER_AVAIL_INTERVAL_24h,
+            120, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_store_check(&cache->analyzer_avail_pings_24h, 86400, 120, "ping");
+    analyzer_avail_store_check(&cache->analyzer_avail_pings_24h, ANALYZER_AVAIL_INTERVAL_24h,
+            120, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
@@ -1380,24 +1384,24 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 static void analyzer_avail_load_all() {
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_uptimes.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_DEFAULT_INTERVAL, "uptime");
+        analyzer_avail_load(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL_1h, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_pings.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_pings, ANALYZER_AVAIL_DEFAULT_INTERVAL, "ping");
+        analyzer_avail_load(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL_1h, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     // 24 h
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_uptimes_24h.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_uptimes_24h, 86400, "uptime");
+        analyzer_avail_load(&cache->analyzer_avail_uptimes_24h, ANALYZER_AVAIL_INTERVAL_24h, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_pings_24h.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_pings_24h, 86400, "ping");
+        analyzer_avail_load(&cache->analyzer_avail_pings_24h, ANALYZER_AVAIL_INTERVAL_24h, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 }
 
@@ -1407,7 +1411,7 @@ static void metric_to_avail(char* metric, char* name, int interval, char* buf) {
     if (strcmp("system.uptime", metric) == 0) {
         memcpy(buf, metric, strlen(metric));
         memcpy(buf + strlen(metric), ".availability", 13);
-        if (interval != ANALYZER_AVAIL_DEFAULT_INTERVAL) {
+        if (interval != ANALYZER_AVAIL_INTERVAL_1h) {
             len = zbx_snprintf(buf + strlen(metric) + 13, 32, "%d", interval);
         }
         buf[strlen(metric) + 13 + len] = '[';
@@ -1423,7 +1427,7 @@ static void metric_to_avail(char* metric, char* name, int interval, char* buf) {
         n = (int) (p - metric);
         memcpy(buf, metric, n);
         memcpy(buf + n, ".avail", 6);
-        if (interval != ANALYZER_AVAIL_DEFAULT_INTERVAL) {
+        if (interval != ANALYZER_AVAIL_INTERVAL_1h) {
             len = zbx_snprintf(buf + n + 6, 32, "%d", interval);
         }
         buf[n + 6 + len] = '.';
@@ -1432,7 +1436,7 @@ static void metric_to_avail(char* metric, char* name, int interval, char* buf) {
     } else {
         memcpy(buf, metric, strlen(metric));
         memcpy(buf + strlen(metric), ".avail", 6);
-        if (interval != ANALYZER_AVAIL_DEFAULT_INTERVAL) {
+        if (interval != ANALYZER_AVAIL_INTERVAL_1h) {
             len = zbx_snprintf(buf + strlen(metric) + 6, 32, "%d", interval);
         }
         buf[strlen(metric) + 6 + len] = '.';
@@ -3948,10 +3952,10 @@ static void	DCsync_all()
 	if (CONFIG_TRENDS_SQL_WRITE && 0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER))
 		DCsync_trends();
     
-    analyzer_avail_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_DEFAULT_INTERVAL);
-    analyzer_avail_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_DEFAULT_INTERVAL);
-    analyzer_avail_check(&cache->analyzer_avail_uptimes_24h, 86400);
-    analyzer_avail_check(&cache->analyzer_avail_pings_24h, 86400);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL_1h);
+    analyzer_avail_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL_1h);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes_24h, ANALYZER_AVAIL_INTERVAL_24h);
+    analyzer_avail_check(&cache->analyzer_avail_pings_24h, ANALYZER_AVAIL_INTERVAL_24h);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of DCsync_all()");
 }
