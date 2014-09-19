@@ -843,8 +843,28 @@ static void analyzer_avail_process_pings(
 
     ZBX_DC_ANALYZER_AVAIL *avail, *avail_tmp;
     int interval_start, prev_interval_end;
+    zbx_uint64_t value;
+    int i, isavailable = 0;
     
     avail = (ZBX_DC_ANALYZER_AVAIL *) zbx_hashset_search(analyzer_avail_pings, &history->itemid);
+
+    // check item value describes available state
+    switch (history->value_type)
+	{
+		case ITEM_VALUE_TYPE_FLOAT:
+            value = (zbx_uint64_t) history->value.dbl;
+			break;
+		case ITEM_VALUE_TYPE_UINT64:
+			value = history->value.ui64;
+			break;
+        default:
+            zabbix_log(LOG_LEVEL_INFORMATION, "Invalid ping avail item value type: %d",
+                history->value_type);
+            return;
+	}
+    if (!DCverify_avail_ping_value(history->itemid, value)) {
+        return;
+    }
 
     if (NULL == avail) {
         if (DCis_avail_ping(history->itemid)) {
