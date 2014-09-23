@@ -798,7 +798,6 @@ static void DCsync_avail(DB_RESULT result) {
                     row[2][i] = '\0';
                     params[params_len] = atoll(row[2] + j);
                     row[2][i] = tmp;
-                    zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] Sync avail: param: %d", params[params_len]);
                     j = i + 1;
                     params_len++;
                     if (params_len == MAX_PARAMS)
