@@ -768,9 +768,11 @@ static void DCsync_avail(DB_RESULT result) {
     DB_ROW row;
     ZBX_DC_AVAIL_CONF avail_local, *avail_row;
     int found = 0;
-    zbx_uint64_t params[64];
+    const int MAX_PARAMS = 64;
+    zbx_uint64_t params[MAX_PARAMS];
     size_t params_len;
     int i, j;
+    char tmp;
 
     zbx_hashset_iter_t	iter;
     zbx_hashset_iter_reset(&config->avail_conf, &iter);
@@ -790,12 +792,17 @@ static void DCsync_avail(DB_RESULT result) {
         params_len = 0;
         avail_local.parameters = NULL;
         if (row[2] != NULL) {
-            for (i = 0, j = 0; i < strlen(row[2]); i++) {
-                if ((row[2][i] == ',' || i == (strlen(row[2]) - 1)) && i != j) {
+            for (i = 0, j = 0; i <= strlen(row[2]); i++) {
+                if ((row[2][i] == ',' || row[2][i] == '\0') && i != j) {
+                    tmp = row[2][i];
                     row[2][i] = '\0';
                     params[params_len] = atoll(row[2] + j);
+                    row[2][i] = tmp;
+                    zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] Sync avail: param: %d", params[params_len]);
                     j = i + 1;
                     params_len++;
+                    if (params_len == MAX_PARAMS)
+                        break;
                 }
             }
             if (params_len > 0) {
