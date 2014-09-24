@@ -805,7 +805,7 @@ static void DCsync_avail(DB_RESULT result) {
             }
             if (params_len > 0) {
                 avail_local.parameters = (zbx_uint64_t*) malloc(sizeof(zbx_uint64_t) * params_len);
-                memcpy(avail_local.parameters, &params, sizeof(zbx_uint64_t) * params_len);
+                memcpy(avail_local.parameters, params, sizeof(zbx_uint64_t) * params_len);
             }
         }
         avail_local.parameters_len = params_len;
