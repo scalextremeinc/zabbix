@@ -793,25 +793,24 @@ static void DCsync_avail(DB_RESULT result) {
         avail_local.parameters = NULL;
         if (row[2] != NULL) {
             for (i = 0, j = 0; i <= strlen(row[2]); i++) {
-                if ((row[2][i] == ',' || row[2][i] == '\0') && i != j) {
-                    tmp = row[2][i];
-                    row[2][i] = '\0';
-                    params[params_len] = atoll(row[2] + j);
-                    row[2][i] = tmp;
-                    j = i + 1;
-                    params_len++;
-                    if (params_len == MAX_PARAMS)
-                        break;
-                }
+                tmp = row[2][i];
+                row[2][i] = '\0';
+                params[params_len] = atoll(row[2] + j);
+                zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] found param: %d", params[params_len]);
+                row[2][i] = tmp;
+                j = i + 1;
+                params_len++;
+                if (params_len == MAX_PARAMS)
+                    break;
             }
             if (params_len > 0) {
                 avail_local.parameters = (zbx_uint64_t*) malloc(sizeof(zbx_uint64_t) * params_len);
-                memcpy(avail_local.parameters, params, sizeof(zbx_uint64_t) * params_len);
+                memcpy(avail_local.parameters, &params, sizeof(zbx_uint64_t) * params_len);
             }
         }
         avail_local.parameters_len = params_len;
 
-        zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] Sync avail: itemid:%d", avail_local.itemid);
+        zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] Sync avail: itemid: %d", avail_local.itemid);
 
         zbx_hashset_insert(&config->avail_conf, &avail_local, sizeof(ZBX_DC_AVAIL_CONF));
     }
@@ -5092,7 +5091,7 @@ int DCverify_avail_ping_value(zbx_uint64_t itemid, zbx_uint64_t value) {
 
         // check if value matches any of configured available values
         for (i = 0; i < avail_conf->parameters_len; i++) {
-            zabbix_log(LOG_LEVEL_INFORMATION, "DCverify_avail_ping_value itemid: %d, value: %d, param: %d", itemid, value, avail_conf->parameters[i]);
+            zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] DCverify_avail_ping_value itemid: %d, value: %d, param: %d", itemid, value, avail_conf->parameters[i]);
             if (value == avail_conf->parameters[i]) {
                 result = 1;
                 break;
