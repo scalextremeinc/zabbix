@@ -335,12 +335,14 @@ typedef struct
 }
 ZBX_DC_AUTOCREATE;
 
+#define ZBX_DC_AVAIL_CONF_MAX_PARAMS 16
+
 typedef struct
 {
     zbx_uint64_t itemid;
     int type;
-    int *parameters;
     size_t parameters_len;
+    int parameters[ZBX_DC_AVAIL_CONF_MAX_PARAMS];
 }
 ZBX_DC_AVAIL_CONF;
 
@@ -768,45 +770,37 @@ static void DCsync_avail(DB_RESULT result) {
     DB_ROW row;
     ZBX_DC_AVAIL_CONF avail_local, *avail_row;
     int found = 0;
-    static const int MAX_PARAMS = 16;
-    int params[MAX_PARAMS];
     int i, j;
     char tmp;
 
     zbx_hashset_iter_t	iter;
     zbx_hashset_iter_reset(&config->avail_conf, &iter);
-
-    while (NULL != (avail_row = zbx_hashset_iter_next(&iter))) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] Sync avail releasing: itemid:%d", avail_row->itemid);
-        if (avail_row->parameters != NULL)
-            free(avail_row->parameters);
-    }
     
+    // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] sleeping...");
+    // zbx_sleep(120);
+
     zbx_hashset_clear(&config->avail_conf);
     while (NULL != (row = DBfetch(result))) {
         avail_local.itemid = atoi(row[0]);
         avail_local.type = atoi(row[1]);
 
         // parse parameters
-        avail_local.parameters = NULL;
         avail_local.parameters_len = 0;
         if (row[2] != NULL) {
             for (i = 0, j = 0; i <= strlen(row[2]); i++) {
-                tmp = row[2][i];
-                row[2][i] = '\0';
-                params[avail_local.parameters_len] = atoi(row[2][j]);
-                zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] found param: %d", params[avail_local.parameters_len]);
-                row[2][i] = tmp;
-                j = i + 1;
-                avail_local.parameters_len++;
-                if (avail_local.parameters_len == MAX_PARAMS) {
-                    zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] max params limit reached, limit: %d, itemid: %d", MAX_PARAMS, avail_local.itemid);
+                if ((row[2][i] == ',' || row[2][i] == '\0') && i != j) {
+                    tmp = row[2][i];
+                    row[2][i] = '\0';
+                    avail_local.parameters[avail_local.parameters_len] = atoi(row[2] + j);
+                    zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] found param: %d", avail_local.parameters[avail_local.parameters_len]);
+                    row[2][i] = tmp;
+                    j = i + 1;
+                    avail_local.parameters_len++;
+                }
+                if (avail_local.parameters_len == ZBX_DC_AVAIL_CONF_MAX_PARAMS) {
+                    zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] max params limit reached, limit: %d, itemid: %d", ZBX_DC_AVAIL_CONF_MAX_PARAMS, avail_local.itemid);
                     break;
                 }
-            }
-            if (avail_local.parameters_len > 0) {
-                avail_local.parameters = (int*) malloc(sizeof(int) * avail_local.parameters_len);
-                memcpy(avail_local.parameters, params, sizeof(int) * avail_local.parameters_len);
             }
         }
 
