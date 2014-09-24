@@ -862,7 +862,7 @@ static void analyzer_avail_process_pings(
                 history->value_type);
             return;
 	}
-    if (!DCverify_avail_ping_value(history->itemid, value)) {
+    if (!DCverify_avail_ping_value(history->itemid, (int) value)) {
         return;
     }
 
