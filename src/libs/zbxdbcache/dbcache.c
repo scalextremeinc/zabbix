@@ -844,7 +844,7 @@ static void analyzer_avail_process_pings(
     ZBX_DC_ANALYZER_AVAIL *avail, *avail_tmp;
     int interval_start, prev_interval_end;
     zbx_uint64_t value;
-    int i, isavailable = 0;
+    int isavailable = 0;
     
     avail = (ZBX_DC_ANALYZER_AVAIL *) zbx_hashset_search(analyzer_avail_pings, &history->itemid);
 
@@ -862,9 +862,6 @@ static void analyzer_avail_process_pings(
                 history->value_type);
             return;
 	}
-    if (!DCverify_avail_ping_value(history->itemid, (int) value)) {
-        return;
-    }
 
     if (NULL == avail) {
         if (DCis_avail_ping(history->itemid)) {
@@ -933,7 +930,10 @@ static void analyzer_avail_process_pings(
             interval, avail->itemid, avail->h[avail->curr].clock,
             avail->h[avail->curr].progress, avail->h[avail->curr].avail, history->clock);
     }
-    
+
+    // check if item value should be considered as available
+    isavailable = DCverify_avail_ping_value(history->itemid, (int) value);
+
     // how previous interval should have ended
     prev_interval_end = avail->h[avail->prev].clock + interval - 1;
     
@@ -942,7 +942,7 @@ static void analyzer_avail_process_pings(
             && avail->h[avail->prev].progress < prev_interval_end) {
         
         // if last hour ping was not too far in the past
-        if (avail->h[avail->prev].progress > history->clock - ANALYZER_AVAIL_PING_FREQ)
+        if (isavailable && avail->h[avail->prev].progress > history->clock - ANALYZER_AVAIL_PING_FREQ)
             avail->h[avail->prev].avail += prev_interval_end - avail->h[avail->prev].progress;
 
         avail->h[avail->prev].progress = prev_interval_end;
@@ -952,6 +952,11 @@ static void analyzer_avail_process_pings(
             "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, clock: %d",
             interval, avail->itemid, avail->h[avail->prev].clock,
             avail->h[avail->prev].progress, avail->h[avail->prev].avail, history->clock);
+    }
+
+    if (!isavailable) {
+        avail->h[avail->curr].progress = history->clock;
+        return;
     }
    
     // if previous ping is within ping max freq increase availability

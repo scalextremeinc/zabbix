@@ -5085,8 +5085,8 @@ int DCverify_avail_ping_value(zbx_uint64_t itemid, int value) {
 
         // check if value matches any of configured available values
         for (i = 0; i < avail_conf->parameters_len; i++) {
-            zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] DCverify_avail_ping_value itemid: %d, value: %d, param: %d", itemid, value, avail_conf->parameters[i]);
             if (value == avail_conf->parameters[i]) {
+                zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] DCverify_avail_ping_value itemid: %d, value: %d, param: %d", itemid, value, avail_conf->parameters[i]);
                 result = 1;
                 break;
             }
