@@ -341,8 +341,8 @@ typedef struct
 {
     zbx_uint64_t itemid;
     int type;
-    size_t parameters_len;
-    int parameters[ZBX_DC_AVAIL_CONF_MAX_PARAMS];
+    size_t params_len;
+    int params[];
 }
 ZBX_DC_AVAIL_CONF;
 
@@ -768,45 +768,55 @@ static void DCsync_autocreate(DB_RESULT result) {
 
 static void DCsync_avail(DB_RESULT result) {
     DB_ROW row;
-    ZBX_DC_AVAIL_CONF avail_local, *avail_row;
-    int found = 0;
     int i, j;
     char tmp;
 
-    zbx_hashset_iter_t	iter;
+    ZBX_DC_AVAIL_CONF avail_local, *avail;
+    int avail_local_params[ZBX_DC_AVAIL_CONF_MAX_PARAMS];
+
+    zbx_hashset_iter_t iter;
     zbx_hashset_iter_reset(&config->avail_conf, &iter);
     
-    // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] sleeping...");
-    // zbx_sleep(120);
-
     zbx_hashset_clear(&config->avail_conf);
     while (NULL != (row = DBfetch(result))) {
         avail_local.itemid = atoi(row[0]);
         avail_local.type = atoi(row[1]);
 
         // parse parameters
-        avail_local.parameters_len = 0;
+        avail_local.params_len = 0;
+
         if (row[2] != NULL) {
             for (i = 0, j = 0; i <= strlen(row[2]); i++) {
                 if ((row[2][i] == ',' || row[2][i] == '\0') && i != j) {
                     tmp = row[2][i];
                     row[2][i] = '\0';
-                    avail_local.parameters[avail_local.parameters_len] = atoi(row[2] + j);
-                    // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] found param: %d", avail_local.parameters[avail_local.parameters_len]);
+                    avail_local_params[avail_local.params_len] = atoi(row[2] + j);
+                    // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] found param: %d",
+                    //     avail_local_params[avail_local.params_len]);
                     row[2][i] = tmp;
                     j = i + 1;
-                    avail_local.parameters_len++;
+                    avail_local.params_len++;
                 }
-                if (avail_local.parameters_len == ZBX_DC_AVAIL_CONF_MAX_PARAMS) {
-                    zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] max params limit reached, limit: %d, itemid: %d", ZBX_DC_AVAIL_CONF_MAX_PARAMS, avail_local.itemid);
+                if (avail_local.params_len == ZBX_DC_AVAIL_CONF_MAX_PARAMS) {
+                    zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] max params limit reached, "
+                        "limit: %d, itemid: %d", ZBX_DC_AVAIL_CONF_MAX_PARAMS, avail_local.itemid);
                     break;
                 }
             }
         }
 
+        avail = (ZBX_DC_AVAIL_CONF*) malloc(sizeof(ZBX_DC_AVAIL_CONF) + sizeof(int) * avail_local.params_len);
+        memcpy(avail, &avail_local, sizeof(ZBX_DC_AVAIL_CONF));
+        if (avail_local.params_len > 0)
+            memcpy(avail->params, avail_local_params, sizeof(int) * avail_local.params_len);
+
         // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] Sync avail: itemid: %d", avail_local.itemid);
 
-        zbx_hashset_insert(&config->avail_conf, &avail_local, sizeof(ZBX_DC_AVAIL_CONF));
+        zbx_hashset_insert(&config->avail_conf, avail,
+                sizeof(ZBX_DC_AVAIL_CONF) + sizeof(int) * avail_local.params_len);
+
+        // free allocated memory as hashset insert copies data, which is stored in shared mem
+        free(avail);
     }
     zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] Sync avail: num_data %d", config->avail_conf.num_data);
 }
@@ -5080,13 +5090,13 @@ int DCverify_avail_ping_value(zbx_uint64_t itemid, int value) {
     if (NULL != avail_conf && 1 == avail_conf->type) {
         // no value config params means each data point is considered as available
         // meaning service is up as long as data is comming
-        if (0 == avail_conf->parameters_len)
+        if (0 == avail_conf->params_len)
             result =  1;
 
         // check if value matches any of configured available values
-        for (i = 0; i < avail_conf->parameters_len; i++) {
-            if (value == avail_conf->parameters[i]) {
-                // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] DCverify_avail_ping_value itemid: %d, value: %d, param: %d", itemid, value, avail_conf->parameters[i]);
+        for (i = 0; i < avail_conf->params_len; i++) {
+            if (value == avail_conf->params[i]) {
+                // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] DCverify_avail_ping_value itemid: %d, value: %d, param: %d", itemid, value, avail_conf->params[i]);
                 result = 1;
                 break;
             }
