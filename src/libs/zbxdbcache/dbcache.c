@@ -1139,7 +1139,6 @@ static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, cha
 
     zbx_snprintf(buf, 1024, "%s/zabbix-analyzer-avail-%s-%d",
             CONFIG_ANALYZER_AVAIL_DIR, name, interval);
-    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Loading availability from disk, file: %s", buf);
     if ((fd = open(buf, O_RDONLY)) == -1) {
         zabbix_log(LOG_LEVEL_ERR, "Error opening avail store, file: %s, error: %s",
             buf, strerror(errno));
@@ -1196,7 +1195,7 @@ static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, cha
         read += avail_size;
         count++;
     }
-    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Loaded availability, count: %d", count);
+    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Loaded availability, count: %d, file: %s", count, buf);
     return;
 
 error_read:
@@ -1205,7 +1204,7 @@ error_read:
 
 }
 
-static void analyzer_avail_store(zbx_hashset_t *analyzer_avail, int fd) {
+static void analyzer_avail_store(zbx_hashset_t *analyzer_avail, int fd, char *filename) {
     zbx_hashset_iter_t	iter;
     ZBX_DC_ANALYZER_AVAIL *avail;
     size_t count = 0;
@@ -1240,7 +1239,8 @@ static void analyzer_avail_store(zbx_hashset_t *analyzer_avail, int fd) {
 
         count++;
     }
-    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Stored availability, count: %d", count);
+    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Saved availability, count: %d, file: %s",
+            count, filename);
     return;
 
 error_write:
@@ -1273,8 +1273,7 @@ static void analyzer_avail_store_check(zbx_hashset_t *analyzer_avail, int interv
     }
 
     if (stat_result.st_mtime + write_interval < now) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Storing availability to disk, file: %s", buf);
-        analyzer_avail_store(analyzer_avail, fd);
+        analyzer_avail_store(analyzer_avail, fd, buf);
         // update file mtime, if there are no avails this prevents trying to store too often
         if (utime(buf, NULL) == -1)
             zabbix_log(LOG_LEVEL_ERR, "Error changing file mtime, file: %s, error: %s",
