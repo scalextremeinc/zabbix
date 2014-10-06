@@ -1129,78 +1129,71 @@ static void analyzer_avail_process_uptimes(
 
 static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, char* name) {
     ZBX_DC_ANALYZER_AVAIL *avail, *insert_result;
-    int fd;
-    int read = 0;
+    FILE *fp;
     char buf[1024];
-    off_t size;
-    size_t avail_size;
     size_t count = 0;
-
+    static const int SCANF_EXPECTED = 11;
+    int scanf_count = SCANF_EXPECTED;
 
     zbx_snprintf(buf, 1024, "%s/zabbix-analyzer-avail-%s-%d",
             CONFIG_ANALYZER_AVAIL_DIR, name, interval);
-    if ((fd = open(buf, O_RDONLY)) == -1) {
+
+    if ((fp = fopen(buf, "r")) == NULL) {
         zabbix_log(LOG_LEVEL_ERR, "Error opening avail store, file: %s, error: %s",
             buf, strerror(errno));
         return;
     }
 
-    avail_size = sizeof(zbx_uint64_t) + sizeof(zbx_uint64_t) + sizeof(int) + sizeof(int)
-        + sizeof(int) + sizeof(double) + sizeof(int) + sizeof(int) + sizeof(double)
-        + sizeof(int) + sizeof(int);
-    
-    // get file size
-    if ((size = lseek(fd, 0, SEEK_END)) == -1)
-        goto error_read;
-
-    // set file offset to beginning
-    if (lseek(fd, 0, SEEK_SET) == -1)
-        goto error_read;
-
-    while (read + avail_size <= size) { 
+    while (1) { 
         avail = (ZBX_DC_ANALYZER_AVAIL *) malloc(sizeof(ZBX_DC_ANALYZER_AVAIL));
 
-        if (zbx_read_all(fd, &avail->itemid, sizeof(zbx_uint64_t)) == -1)
-            goto error_read;
-        if (zbx_read_all(fd, &avail->value_last, sizeof(zbx_uint64_t)) == -1)
-            goto error_read;
-        if (zbx_read_all(fd, &avail->clock_last, sizeof(int)) == -1)
-            goto error_read;
-        if (zbx_read_all(fd, &avail->curr, sizeof(int)) == -1)
-            goto error_read;
-        if (zbx_read_all(fd, &avail->prev, sizeof(int)) == -1)
-            goto error_read;
+        scanf_count = fscanf(fp, ZBX_FS_UI64 ":" ZBX_FS_UI64 ":%d:%d:%d:%lf:%d:%d:%lf:%d:%d\n",
+                &avail->itemid, &avail->value_last, &avail->clock_last, &avail->curr, &avail->prev,
+                &(avail->h[0].avail), &(avail->h[0].progress), &(avail->h[0].clock),
+                &(avail->h[1].avail), &(avail->h[1].progress), &(avail->h[1].clock));
 
-        if (zbx_read_all(fd, &avail->h[0].avail, sizeof(double)) == -1)
+        if (EOF == scanf_count && ferror(fp)) {
+            free(avail);
             goto error_read;
-        if (zbx_read_all(fd, &avail->h[0].progress, sizeof(int)) == -1)
-            goto error_read;
-        if (zbx_read_all(fd, &avail->h[0].clock, sizeof(int)) == -1)
-            goto error_read;
-
-        if (zbx_read_all(fd, &avail->h[1].avail, sizeof(double)) == -1)
-            goto error_read;
-        if (zbx_read_all(fd, &avail->h[1].progress, sizeof(int)) == -1)
-            goto error_read;
-        if (zbx_read_all(fd, &avail->h[1].clock, sizeof(int)) == -1)
-            goto error_read;
-
-        insert_result = zbx_hashset_insert(analyzer_avail, avail, sizeof(ZBX_DC_ANALYZER_AVAIL));
-        free(avail);
-        if (NULL == insert_result) {
-            zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL%d] failed crateing new avail", interval);
-            return;
         }
 
-        read += avail_size;
-        count++;
+        if (scanf_count == SCANF_EXPECTED) {
+            zabbix_log(LOG_LEVEL_INFORMATION,
+                    "[ANALYZER/AVAIL%d] loaded: " ZBX_FS_UI64 ":" ZBX_FS_UI64
+                    ":%d:%d:%d:%lf:%d:%d:%lf:%d:%d",
+                    interval, avail->itemid, avail->value_last,
+                    avail->clock_last, avail->curr, avail->prev,
+                    avail->h[0].avail, avail->h[0].progress, avail->h[0].clock,
+                    avail->h[1].avail, avail->h[1].progress, avail->h[1].clock);
+
+            insert_result = zbx_hashset_insert(analyzer_avail, avail, sizeof(ZBX_DC_ANALYZER_AVAIL));
+            free(avail);
+            if (NULL == insert_result) {
+                zabbix_log(LOG_LEVEL_INFORMATION,
+                        "[ANALYZER/AVAIL%d] failed crateing new avail", interval);
+                return;
+            }
+
+            count++;
+            continue;
+        }
+
+        break;
     }
-    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Loaded availability, count: %d, file: %s", count, buf);
-    return;
+
+    zabbix_log(LOG_LEVEL_INFORMATION,
+            "[ANALYZER/AVAIL] Loaded availability, count: %d, file: %s", count, buf);
+    goto out;
 
 error_read:
-    free(avail);
-    zabbix_log(LOG_LEVEL_ERR, "Error reading avail from store, error: %s", strerror(errno));
+    zabbix_log(LOG_LEVEL_ERR,
+            "Error reading avail from store, file: %s, error: %s", buf, strerror(errno));
+
+out:
+    if (fclose(fp) != 0) {
+        zabbix_log(LOG_LEVEL_ERR, "Error closing avail store stream, file: %s, error: %s",
+            buf, strerror(errno));
+    }
 
 }
 
@@ -1208,44 +1201,47 @@ static void analyzer_avail_store(zbx_hashset_t *analyzer_avail, int fd, char *fi
     zbx_hashset_iter_t	iter;
     ZBX_DC_ANALYZER_AVAIL *avail;
     size_t count = 0;
+    FILE *fp;
+
+    if (ftruncate(fd, 0) != 0)
+        goto error_write;
+
+    if (lseek(fd, 0, SEEK_SET) == -1)
+        goto error_write;
+
+    if ((fp = fdopen(fd, "w+")) == NULL) {
+        zabbix_log(LOG_LEVEL_ERR,
+                "Error opening file stream, file: %s, error: %s", filename, strerror(errno));
+        goto out;
+    }
 
 	zbx_hashset_iter_reset(analyzer_avail, &iter);
 	while (NULL != (avail = (ZBX_DC_ANALYZER_AVAIL *) zbx_hashset_iter_next(&iter))) {
-        // we don't care about byte ordering because this is cache for single machine
-        if (zbx_write_all(fd, &avail->itemid, sizeof(zbx_uint64_t)) == -1)
-            goto error_write;
-        if (zbx_write_all(fd, &avail->value_last, sizeof(zbx_uint64_t)) == -1)
-            goto error_write;
-        if (zbx_write_all(fd, &avail->clock_last, sizeof(int)) == -1)
-            goto error_write;
-        if (zbx_write_all(fd, &avail->curr, sizeof(int)) == -1)
-            goto error_write;
-        if (zbx_write_all(fd, &avail->prev, sizeof(int)) == -1)
-            goto error_write;
 
-        if (zbx_write_all(fd, &avail->h[0].avail, sizeof(double)) == -1)
+        if (fprintf(fp, ZBX_FS_UI64 ":" ZBX_FS_UI64 ":%d:%d:%d:%lf:%d:%d:%lf:%d:%d\n",
+                    avail->itemid, avail->value_last, avail->clock_last, avail->curr, avail->prev,
+                    avail->h[0].avail, avail->h[0].progress, avail->h[0].clock,
+                    avail->h[1].avail, avail->h[1].progress, avail->h[1].clock) < 0) {
             goto error_write;
-        if (zbx_write_all(fd, &avail->h[0].progress, sizeof(int)) == -1)
-            goto error_write;
-        if (zbx_write_all(fd, &avail->h[0].clock, sizeof(int)) == -1)
-            goto error_write;
-
-        if (zbx_write_all(fd, &avail->h[1].avail, sizeof(double)) == -1)
-            goto error_write;
-        if (zbx_write_all(fd, &avail->h[1].progress, sizeof(int)) == -1)
-            goto error_write;
-        if (zbx_write_all(fd, &avail->h[1].clock, sizeof(int)) == -1)
-            goto error_write;
+        }
 
         count++;
     }
-    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Saved availability, count: %d, file: %s",
-            count, filename);
-    return;
+    zabbix_log(LOG_LEVEL_INFORMATION,
+            "[ANALYZER/AVAIL] Saved availability, count: %d, file: %s", count, filename);
+    goto out;
 
 error_write:
-    zabbix_log(LOG_LEVEL_ERR, "Error writing to avail store, error: %s", strerror(errno));
+    zabbix_log(LOG_LEVEL_ERR,
+            "Error writing to avail store, file: %s, error: %s", filename, strerror(errno));
 
+out:
+    if (fp != NULL && EOF == fclose(fp)) {
+        zabbix_log(LOG_LEVEL_ERR,
+                "Error closing file stream, file: %s, error: %s", filename, strerror(errno));
+    }
+
+    return;
 }
 
 static void analyzer_avail_store_check(zbx_hashset_t *analyzer_avail, int interval,
@@ -1280,10 +1276,7 @@ static void analyzer_avail_store_check(zbx_hashset_t *analyzer_avail, int interv
                     buf, strerror(errno));
     }
 
-    if (close(fd) != 0) {
-        zabbix_log(LOG_LEVEL_ERR, "Error closing avail store, file: %s, error: %s",
-            buf, strerror(errno));
-    }
+    // analyzer_avail_store closes file stream which cuses to close file descriptor
 }
 
 static void analyzer_avail_check(zbx_hashset_t *analyzer_avail, int interval) {
@@ -1342,63 +1335,63 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 	for (i = 0; i < history_num; i++) {
         LOCK_ANALYZER_AVAIL_UPTIMES;
 		analyzer_avail_process_uptimes(&history[i], &cache->analyzer_avail_uptimes,
-                ANALYZER_AVAIL_INTERVAL_1h);
+                300);
         UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
         LOCK_ANALYZER_AVAIL_PINGS;
 		analyzer_avail_process_pings(&history[i], &cache->analyzer_avail_pings,
-                ANALYZER_AVAIL_INTERVAL_1h);
+                300);
         UNLOCK_ANALYZER_AVAIL_PINGS;
 
         // 24h
         LOCK_ANALYZER_AVAIL_UPTIMES_24H;
 		analyzer_avail_process_uptimes(&history[i], &cache->analyzer_avail_uptimes_24h,
-                ANALYZER_AVAIL_INTERVAL_24h);
+                900);
         UNLOCK_ANALYZER_AVAIL_UPTIMES_24H;
 
         LOCK_ANALYZER_AVAIL_PINGS_24H;
 		analyzer_avail_process_pings(&history[i], &cache->analyzer_avail_pings_24h,
-                ANALYZER_AVAIL_INTERVAL_24h);
+                900);
         UNLOCK_ANALYZER_AVAIL_PINGS_24H;
 	}
     
 	LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL_1h);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes, 300);
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
 	LOCK_ANALYZER_AVAIL_PINGS;
-    analyzer_avail_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL_1h);
+    analyzer_avail_check(&cache->analyzer_avail_pings, 300);
     UNLOCK_ANALYZER_AVAIL_PINGS;
 
     // 24h
 
 	LOCK_ANALYZER_AVAIL_UPTIMES_24H;
-    analyzer_avail_check(&cache->analyzer_avail_uptimes_24h, ANALYZER_AVAIL_INTERVAL_24h);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes_24h, 900);
     UNLOCK_ANALYZER_AVAIL_UPTIMES_24H;
 
 	LOCK_ANALYZER_AVAIL_PINGS_24H;
-    analyzer_avail_check(&cache->analyzer_avail_pings_24h, ANALYZER_AVAIL_INTERVAL_24h);
+    analyzer_avail_check(&cache->analyzer_avail_pings_24h, 900);
     UNLOCK_ANALYZER_AVAIL_PINGS_24H;
 
     // try storing
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_store_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL_1h,
+    analyzer_avail_store_check(&cache->analyzer_avail_uptimes, 300,
             60, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_store_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL_1h,
+    analyzer_avail_store_check(&cache->analyzer_avail_pings, 300,
             60, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_store_check(&cache->analyzer_avail_uptimes_24h, ANALYZER_AVAIL_INTERVAL_24h,
+    analyzer_avail_store_check(&cache->analyzer_avail_uptimes_24h, 900,
             120, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_store_check(&cache->analyzer_avail_pings_24h, ANALYZER_AVAIL_INTERVAL_24h,
+    analyzer_avail_store_check(&cache->analyzer_avail_pings_24h, 900,
             120, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
@@ -1408,24 +1401,24 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 static void analyzer_avail_load_all() {
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_uptimes.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL_1h, "uptime");
+        analyzer_avail_load(&cache->analyzer_avail_uptimes, 300, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_pings.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL_1h, "ping");
+        analyzer_avail_load(&cache->analyzer_avail_pings, 300, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     // 24 h
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_uptimes_24h.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_uptimes_24h, ANALYZER_AVAIL_INTERVAL_24h, "uptime");
+        analyzer_avail_load(&cache->analyzer_avail_uptimes_24h, 900, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_pings_24h.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_pings_24h, ANALYZER_AVAIL_INTERVAL_24h, "ping");
+        analyzer_avail_load(&cache->analyzer_avail_pings_24h, 900, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 }
 
