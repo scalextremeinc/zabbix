@@ -1139,8 +1139,9 @@ static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, cha
             CONFIG_ANALYZER_AVAIL_DIR, name, interval);
 
     if ((fp = fopen(buf, "r")) == NULL) {
-        zabbix_log(LOG_LEVEL_ERR, "Error opening avail store, file: %s, error: %s",
-            buf, strerror(errno));
+        zabbix_log(LOG_LEVEL_ERR,
+                "[ANALYZER/AVAIL] Error opening avail store, file: %s, error: %s",
+                buf, strerror(errno));
         return;
     }
 
@@ -1187,12 +1188,14 @@ static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, cha
 
 error_read:
     zabbix_log(LOG_LEVEL_ERR,
-            "Error reading avail from store, file: %s, error: %s", buf, strerror(errno));
+            "[ANALYZER/AVAIL] Error reading avail from store, file: %s, error: %s",
+            buf, strerror(errno));
 
 out:
     if (fclose(fp) != 0) {
-        zabbix_log(LOG_LEVEL_ERR, "Error closing avail store stream, file: %s, error: %s",
-            buf, strerror(errno));
+        zabbix_log(LOG_LEVEL_ERR,
+                "[ANALYZER/AVAIL] Error closing avail store stream, file: %s, error: %s",
+                buf, strerror(errno));
     }
 
 }
@@ -1211,7 +1214,8 @@ static void analyzer_avail_store(zbx_hashset_t *analyzer_avail, int fd, char *fi
 
     if ((fp = fdopen(fd, "w+")) == NULL) {
         zabbix_log(LOG_LEVEL_ERR,
-                "Error opening file stream, file: %s, error: %s", filename, strerror(errno));
+                "[ANALYZER/AVAIL] Error opening file stream, file: %s, error: %s",
+                filename, strerror(errno));
         goto out;
     }
 
@@ -1233,12 +1237,14 @@ static void analyzer_avail_store(zbx_hashset_t *analyzer_avail, int fd, char *fi
 
 error_write:
     zabbix_log(LOG_LEVEL_ERR,
-            "Error writing to avail store, file: %s, error: %s", filename, strerror(errno));
+            "[ANALYZER/AVAIL] Error writing to avail store, file: %s, error: %s",
+            filename, strerror(errno));
 
 out:
     if (fp != NULL && EOF == fclose(fp)) {
         zabbix_log(LOG_LEVEL_ERR,
-                "Error closing file stream, file: %s, error: %s", filename, strerror(errno));
+                "[ANALYZER/AVAIL] Error closing file stream, file: %s, error: %s",
+                filename, strerror(errno));
     }
 
     return;
@@ -1258,13 +1264,16 @@ static void analyzer_avail_store_check(zbx_hashset_t *analyzer_avail, int interv
             CONFIG_ANALYZER_AVAIL_DIR, name, interval);
 
     if ((fd = open(buf, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)) == -1) {
-        zabbix_log(LOG_LEVEL_ERR, "Error opening avail store, file: %s, error: %s",
-            buf, strerror(errno));
+        zabbix_log(LOG_LEVEL_ERR,
+                "[ANALYZER/AVAIL] Error opening avail store, file: %s, error: %s",
+                buf, strerror(errno));
         return;
     }
     if (fstat(fd, &stat_result) == -1) {
-        zabbix_log(LOG_LEVEL_ERR, "Error stating avail store, file: %s, error: %s",
-            buf, strerror(errno));
+        zabbix_log(LOG_LEVEL_ERR,
+                "[ANALYZER/AVAIL] Error fstat avail store, file: %s, error: %s",
+                buf, strerror(errno));
+        close(fd);
         return;
     }
 
@@ -1272,11 +1281,17 @@ static void analyzer_avail_store_check(zbx_hashset_t *analyzer_avail, int interv
         analyzer_avail_store(analyzer_avail, fd, buf);
         // update file mtime, if there are no avails this prevents trying to store too often
         if (utime(buf, NULL) == -1)
-            zabbix_log(LOG_LEVEL_ERR, "Error changing file mtime, file: %s, error: %s",
+            zabbix_log(LOG_LEVEL_ERR,
+                    "[ANALYZER/AVAIL] Error changing file mtime, file: %s, error: %s",
                     buf, strerror(errno));
+        // analyzer_avail_store closes file stream which cuses to close file descriptor
+    } else {
+        if (close(fd) != 0) {
+            zabbix_log(LOG_LEVEL_ERR,
+                    "[ANALYZER/AVAIL] Error closing file descriptor, file: %s, error: %s",
+                    buf, strerror(errno));
+        }
     }
-
-    // analyzer_avail_store closes file stream which cuses to close file descriptor
 }
 
 static void analyzer_avail_check(zbx_hashset_t *analyzer_avail, int interval) {
@@ -1380,20 +1395,20 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
             60, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
-    LOCK_ANALYZER_AVAIL_UPTIMES;
+    LOCK_ANALYZER_AVAIL_PINGS;
     analyzer_avail_store_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL_1h,
             60, "ping");
-    UNLOCK_ANALYZER_AVAIL_UPTIMES;
+    UNLOCK_ANALYZER_AVAIL_PINGS;
 
-    LOCK_ANALYZER_AVAIL_UPTIMES;
+    LOCK_ANALYZER_AVAIL_UPTIMES_24H;
     analyzer_avail_store_check(&cache->analyzer_avail_uptimes_24h, ANALYZER_AVAIL_INTERVAL_24h,
             120, "uptime");
-    UNLOCK_ANALYZER_AVAIL_UPTIMES;
+    UNLOCK_ANALYZER_AVAIL_UPTIMES_24H;
 
-    LOCK_ANALYZER_AVAIL_UPTIMES;
+    LOCK_ANALYZER_AVAIL_PINGS_24H;
     analyzer_avail_store_check(&cache->analyzer_avail_pings_24h, ANALYZER_AVAIL_INTERVAL_24h,
             120, "ping");
-    UNLOCK_ANALYZER_AVAIL_UPTIMES;
+    UNLOCK_ANALYZER_AVAIL_PINGS_24H;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
 }
