@@ -966,8 +966,7 @@ static void analyzer_avail_process_pings(
     }
 
     if (!isavailable) {
-        avail->h[avail->curr].progress = history->clock;
-        return;
+        goto out;
     }
    
     // if previous ping is within ping max freq increase availability
@@ -978,6 +977,7 @@ static void analyzer_avail_process_pings(
         avail->h[avail->curr].avail += history->clock - avail->h[avail->curr].progress;
     }
 
+out:
     avail->h[avail->curr].progress = history->clock;
     avail->clock_last = history->clock;
 }
