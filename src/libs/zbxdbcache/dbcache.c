@@ -94,7 +94,7 @@ static int ZBX_ANALYZER_AVAIL_Q_SIZE = 0;
 static int ANALYZER_AVAIL_INTERVAL_1h = 3600;
 static int ANALYZER_AVAIL_INTERVAL_24h = 86400;
 
-static int ANALYZER_AVAIL_PING_FREQ = 90;
+static int ANALYZER_AVAIL_PING_FREQ = 120;
 
 typedef struct
 {
@@ -931,6 +931,15 @@ static void analyzer_avail_process_pings(
             avail->h[avail->curr].progress, avail->h[avail->curr].avail, history->clock);
     }
 
+    if (history->clock < avail->h[avail->curr].progress) {
+        // out of order data point
+        zabbix_log(LOG_LEVEL_INFORMATION,
+            "[ANALYZER/PING%d] out of order data point, "
+            "itemid: " ZBX_FS_UI64 ", avail clock: %d, progress: %d, avail: %f, data point clock: %d",
+            interval, avail->itemid, avail->h[avail->curr].clock,
+            avail->h[avail->curr].progress, avail->h[avail->curr].avail, history->clock);
+    }
+
     // check if item value should be considered as available
     isavailable = DCverify_avail_ping_value(history->itemid, (int) value);
 
@@ -1068,6 +1077,15 @@ static void analyzer_avail_process_uptimes(
             uptime->h[uptime->curr].avail, history_uptime, history->clock);
     }
     
+    if (history->clock < uptime->h[uptime->curr].progress) {
+        // out of order data point
+        zabbix_log(LOG_LEVEL_INFORMATION,
+            "[ANALYZER/UPTIME%d] out of order data point, "
+            "itemid: " ZBX_FS_UI64 ", avail clock: %d, progress: %d, avail: %f, data point clock: %d",
+            interval, uptime->itemid, uptime->h[uptime->curr].clock,
+            uptime->h[uptime->curr].progress, uptime->h[uptime->curr].avail, history->clock);
+    }
+
     // how previous interval should have ended
     prev_interval_end = uptime->h[uptime->prev].clock + interval - 1;
     
@@ -1332,7 +1350,6 @@ static void analyzer_avail_check(zbx_hashset_t *analyzer_avail, int interval) {
                 "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f",
                 interval, avail->itemid, avail->h[avail->prev].clock,
                 avail->h[avail->prev].progress, avail->h[avail->prev].avail);
-            //zbx_hashset_remove(&analyzer_avail_uptimes, uptime);
             zbx_hashset_iter_remove(&iter);
         }
     }
