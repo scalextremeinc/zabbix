@@ -892,6 +892,16 @@ static void analyzer_avail_process_pings(
             return;
         }
     }
+    
+    if (history->clock < avail->clock_last) {
+        // out of order data point
+        zabbix_log(LOG_LEVEL_INFORMATION,
+            "[ANALYZER/PING%d] out of order data point, "
+            "itemid: " ZBX_FS_UI64 ", avail clock: %d, progress: %d, avail: %f, data point clock: %d",
+            interval, avail->itemid, avail->h[avail->curr].clock,
+            avail->h[avail->curr].progress, avail->h[avail->curr].avail, history->clock);
+        return;
+    }
 
 	interval_start = history->clock - (history->clock % interval);
     prev_interval_end = interval_start - 1;
@@ -931,14 +941,6 @@ static void analyzer_avail_process_pings(
             avail->h[avail->curr].progress, avail->h[avail->curr].avail, history->clock);
     }
 
-    if (history->clock < avail->h[avail->curr].progress) {
-        // out of order data point
-        zabbix_log(LOG_LEVEL_INFORMATION,
-            "[ANALYZER/PING%d] out of order data point, "
-            "itemid: " ZBX_FS_UI64 ", avail clock: %d, progress: %d, avail: %f, data point clock: %d",
-            interval, avail->itemid, avail->h[avail->curr].clock,
-            avail->h[avail->curr].progress, avail->h[avail->curr].avail, history->clock);
-    }
 
     // check if item value should be considered as available
     isavailable = DCverify_avail_ping_value(history->itemid, (int) value);
@@ -975,8 +977,9 @@ static void analyzer_avail_process_pings(
             avail->h[avail->curr].avail++;
         avail->h[avail->curr].avail += history->clock - avail->h[avail->curr].progress;
     }
-    
+
     avail->h[avail->curr].progress = history->clock;
+    avail->clock_last = history->clock;
 }
 
 static void analyzer_avail_process_uptimes(
@@ -1037,8 +1040,15 @@ static void analyzer_avail_process_uptimes(
             return;
 	}
     
-    //zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/UPTIME] itemid: %d, hour: %d",
-    //    history->itemid, hour);
+    if (history->clock < uptime->clock_last) {
+        // out of order data point
+        zabbix_log(LOG_LEVEL_INFORMATION,
+            "[ANALYZER/UPTIME%d] out of order data point, "
+            "itemid: " ZBX_FS_UI64 ", avail clock: %d, progress: %d, avail: %f, data point clock: %d",
+            interval, uptime->itemid, uptime->h[uptime->curr].clock,
+            uptime->h[uptime->curr].progress, uptime->h[uptime->curr].avail, history->clock);
+        return;
+    }
     
     // new hour
     if (interval_start > uptime->h[uptime->curr].clock) {
@@ -1077,15 +1087,6 @@ static void analyzer_avail_process_uptimes(
             uptime->h[uptime->curr].avail, history_uptime, history->clock);
     }
     
-    if (history->clock < uptime->h[uptime->curr].progress) {
-        // out of order data point
-        zabbix_log(LOG_LEVEL_INFORMATION,
-            "[ANALYZER/UPTIME%d] out of order data point, "
-            "itemid: " ZBX_FS_UI64 ", avail clock: %d, progress: %d, avail: %f, data point clock: %d",
-            interval, uptime->itemid, uptime->h[uptime->curr].clock,
-            uptime->h[uptime->curr].progress, uptime->h[uptime->curr].avail, history->clock);
-    }
-
     // how previous interval should have ended
     prev_interval_end = uptime->h[uptime->prev].clock + interval - 1;
     
@@ -1125,10 +1126,8 @@ static void analyzer_avail_process_uptimes(
         }
     }
     
-    // machine was down
     if (history_uptime < uptime->value_last) {
-        uptime->h[uptime->curr].progress = history->clock;
-        
+        // machine was down
         zabbix_log(LOG_LEVEL_INFORMATION,
             "[ANALYZER/UPTIME%d] machine down discovered, "
             "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, uptime: "
@@ -1136,11 +1135,12 @@ static void analyzer_avail_process_uptimes(
             uptime->itemid, uptime->h[uptime->curr].clock, uptime->h[uptime->curr].progress,
             uptime->h[uptime->curr].avail, history_uptime, history->clock);
     } else {
+        // avail increases
         int avail = history->clock - (uptime->h[uptime->curr].progress - 1);
         uptime->h[uptime->curr].avail += avail;
-        uptime->h[uptime->curr].progress = history->clock;
     }
-    
+
+    uptime->h[uptime->curr].progress = history->clock;
     uptime->value_last = history_uptime;
     uptime->clock_last = history->clock;
 }
