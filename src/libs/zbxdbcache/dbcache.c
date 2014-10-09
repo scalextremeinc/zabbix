@@ -93,6 +93,7 @@ static int ZBX_ANALYZER_AVAIL_Q_SIZE = 0;
 
 static int ANALYZER_AVAIL_INTERVAL_1h = 3600;
 static int ANALYZER_AVAIL_INTERVAL_24h = 86400;
+static int ANALYZER_AVAIL_STORE_INTERVAL = 60;
 
 static int ANALYZER_AVAIL_PING_FREQ = 120;
 
@@ -964,20 +965,15 @@ static void analyzer_avail_process_pings(
             interval, avail->itemid, avail->h[avail->prev].clock,
             avail->h[avail->prev].progress, avail->h[avail->prev].avail, history->clock);
     }
-
-    if (!isavailable) {
-        goto out;
-    }
    
     // if previous ping is within ping max freq increase availability
-    if (avail->h[avail->curr].progress > history->clock - ANALYZER_AVAIL_PING_FREQ) {
+    if (isavailable && avail->h[avail->curr].progress > history->clock - ANALYZER_AVAIL_PING_FREQ) {
         // count first second too
         if (0 == avail->h[avail->curr].avail)
             avail->h[avail->curr].avail++;
         avail->h[avail->curr].avail += history->clock - avail->h[avail->curr].progress;
     }
 
-out:
     avail->h[avail->curr].progress = history->clock;
     avail->clock_last = history->clock;
 }
@@ -1366,24 +1362,24 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 
 	for (i = 0; i < history_num; i++) {
         LOCK_ANALYZER_AVAIL_UPTIMES;
-		analyzer_avail_process_uptimes(&history[i], &cache->analyzer_avail_uptimes,
-                ANALYZER_AVAIL_INTERVAL_1h);
+		analyzer_avail_process_uptimes(&history[i],
+                &cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL_1h);
         UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
         LOCK_ANALYZER_AVAIL_PINGS;
-		analyzer_avail_process_pings(&history[i], &cache->analyzer_avail_pings,
-                ANALYZER_AVAIL_INTERVAL_1h);
+		analyzer_avail_process_pings(&history[i],
+                &cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL_1h);
         UNLOCK_ANALYZER_AVAIL_PINGS;
 
         // 24h
         LOCK_ANALYZER_AVAIL_UPTIMES_24H;
-		analyzer_avail_process_uptimes(&history[i], &cache->analyzer_avail_uptimes_24h,
-                ANALYZER_AVAIL_INTERVAL_24h);
+		analyzer_avail_process_uptimes(&history[i],
+                &cache->analyzer_avail_uptimes_24h, ANALYZER_AVAIL_INTERVAL_24h);
         UNLOCK_ANALYZER_AVAIL_UPTIMES_24H;
 
         LOCK_ANALYZER_AVAIL_PINGS_24H;
-		analyzer_avail_process_pings(&history[i], &cache->analyzer_avail_pings_24h,
-                ANALYZER_AVAIL_INTERVAL_24h);
+		analyzer_avail_process_pings(&history[i],
+                &cache->analyzer_avail_pings_24h, ANALYZER_AVAIL_INTERVAL_24h);
         UNLOCK_ANALYZER_AVAIL_PINGS_24H;
 	}
     
@@ -1408,23 +1404,23 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
     // try storing
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_store_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL_1h,
-            60, "uptime");
+    analyzer_avail_store_check(&cache->analyzer_avail_uptimes,
+            ANALYZER_AVAIL_INTERVAL_1h, ANALYZER_AVAIL_STORE_INTERVAL, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_PINGS;
-    analyzer_avail_store_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL_1h,
-            60, "ping");
+    analyzer_avail_store_check(&cache->analyzer_avail_pings,
+            ANALYZER_AVAIL_INTERVAL_1h, ANALYZER_AVAIL_STORE_INTERVAL, "ping");
     UNLOCK_ANALYZER_AVAIL_PINGS;
 
     LOCK_ANALYZER_AVAIL_UPTIMES_24H;
-    analyzer_avail_store_check(&cache->analyzer_avail_uptimes_24h, ANALYZER_AVAIL_INTERVAL_24h,
-            120, "uptime");
+    analyzer_avail_store_check(&cache->analyzer_avail_uptimes_24h,
+            ANALYZER_AVAIL_INTERVAL_24h, ANALYZER_AVAIL_STORE_INTERVAL, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES_24H;
 
     LOCK_ANALYZER_AVAIL_PINGS_24H;
-    analyzer_avail_store_check(&cache->analyzer_avail_pings_24h, ANALYZER_AVAIL_INTERVAL_24h,
-            120, "ping");
+    analyzer_avail_store_check(&cache->analyzer_avail_pings_24h,
+            ANALYZER_AVAIL_INTERVAL_24h, ANALYZER_AVAIL_STORE_INTERVAL, "ping");
     UNLOCK_ANALYZER_AVAIL_PINGS_24H;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
