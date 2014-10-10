@@ -91,12 +91,12 @@ static int ZBX_ANALYZER_AVAIL_Q_SIZE = 0;
 
 #define ZBX_IDS_SIZE	10
 
-static int ANALYZER_AVAIL_INTERVAL1 = 3600;
-static int ANALYZER_AVAIL_INTERVAL2 = 86400;
+// static int ANALYZER_AVAIL_INTERVAL1 = 3600;
+// static int ANALYZER_AVAIL_INTERVAL2 = 86400;
 
 // debug:
-// static int ANALYZER_AVAIL_INTERVAL1 = 300;
-// static int ANALYZER_AVAIL_INTERVAL2 = 900;
+static int ANALYZER_AVAIL_INTERVAL1 = 300;
+static int ANALYZER_AVAIL_INTERVAL2 = 900;
 
 static int ANALYZER_AVAIL_STORE_INTERVAL = 60;
 
@@ -845,58 +845,44 @@ static void analyzer_avail_queue(ZBX_DC_ANALYZER_AVAIL *avail, int interval) {
 }
 
 static void analyzer_avail_process_pings(
-        ZBX_DC_HISTORY *history, zbx_hashset_t *analyzer_avail_pings, int interval) {
+        ZBX_DC_HISTORY *history, zbx_hashset_t *analyzer_avails, int interval) {
 
     ZBX_DC_ANALYZER_AVAIL *avail, *avail_tmp;
     int interval_start, prev_interval_end;
     zbx_uint64_t value;
     int isavailable = 0;
     
-    avail = (ZBX_DC_ANALYZER_AVAIL *) zbx_hashset_search(analyzer_avail_pings, &history->itemid);
+    avail = (ZBX_DC_ANALYZER_AVAIL *) zbx_hashset_search(analyzer_avails, &history->itemid);
 
-    // check item value describes available state
-    switch (history->value_type)
-	{
-		case ITEM_VALUE_TYPE_FLOAT:
-            value = (zbx_uint64_t) history->value.dbl;
-			break;
-		case ITEM_VALUE_TYPE_UINT64:
-			value = history->value.ui64;
-			break;
-        default:
-            zabbix_log(LOG_LEVEL_INFORMATION, "Invalid ping avail item value type: %d",
-                history->value_type);
-            return;
-	}
 
     if (NULL == avail) {
-        if (DCis_avail_ping(history->itemid)) {
-            avail_tmp = (ZBX_DC_ANALYZER_AVAIL *) malloc(sizeof(ZBX_DC_ANALYZER_AVAIL));
-            avail_tmp->itemid = history->itemid;
-            avail_tmp->value_last = 0;
-            avail_tmp->clock_last = 0;
-            avail_tmp->h[0].avail = 0;
-            avail_tmp->h[0].progress = 0;
-            avail_tmp->h[0].clock = 0;
-            avail_tmp->h[1].avail = 0;
-            avail_tmp->h[1].progress = 0;
-            avail_tmp->h[1].clock = 0;
-            avail_tmp->curr = 0;
-            avail_tmp->prev = 1;
-            
-            avail = zbx_hashset_insert(analyzer_avail_pings, avail_tmp, sizeof(ZBX_DC_ANALYZER_AVAIL));
-            free(avail_tmp);
-            if (NULL == avail) {
-                zabbix_log(LOG_LEVEL_INFORMATION, 
-                        "[ANALYZER/PING%d] failed creating new avail ping, itemid: "
-                        ZBX_FS_UI64, interval, history->itemid);
-                return;
-            }
-            zabbix_log(LOG_LEVEL_INFORMATION, 
-                    "[ANALYZER/PING%d] item added, itemid: " ZBX_FS_UI64, interval, history->itemid);
-        } else {
+        if (!DCis_avail_ping(history->itemid)) {
             return;
         }
+
+        avail_tmp = (ZBX_DC_ANALYZER_AVAIL *) malloc(sizeof(ZBX_DC_ANALYZER_AVAIL));
+        avail_tmp->itemid = history->itemid;
+        avail_tmp->value_last = 0;
+        avail_tmp->clock_last = 0;
+        avail_tmp->h[0].avail = 0;
+        avail_tmp->h[0].progress = 0;
+        avail_tmp->h[0].clock = 0;
+        avail_tmp->h[1].avail = 0;
+        avail_tmp->h[1].progress = 0;
+        avail_tmp->h[1].clock = 0;
+        avail_tmp->curr = 0;
+        avail_tmp->prev = 1;
+        
+        avail = zbx_hashset_insert(analyzer_avails, avail_tmp, sizeof(ZBX_DC_ANALYZER_AVAIL));
+        free(avail_tmp);
+        if (NULL == avail) {
+            zabbix_log(LOG_LEVEL_INFORMATION, 
+                    "[ANALYZER/PING%d] failed creating new avail ping, itemid: "
+                    ZBX_FS_UI64, interval, history->itemid);
+            return;
+        }
+        zabbix_log(LOG_LEVEL_INFORMATION, 
+                "[ANALYZER/PING%d] item added, itemid: " ZBX_FS_UI64, interval, history->itemid);
     }
     
     if (history->clock < avail->clock_last) {
@@ -911,6 +897,20 @@ static void analyzer_avail_process_pings(
 
 	interval_start = history->clock - (history->clock % interval);
     prev_interval_end = interval_start - 1;
+    
+    switch (history->value_type)
+	{
+		case ITEM_VALUE_TYPE_FLOAT:
+            value = (zbx_uint64_t) history->value.dbl;
+			break;
+		case ITEM_VALUE_TYPE_UINT64:
+			value = history->value.ui64;
+			break;
+        default:
+            zabbix_log(LOG_LEVEL_INFORMATION, "Invalid ping avail item value type: %d",
+                history->value_type);
+            return;
+	}
 
     // new hour
     if (interval_start > avail->h[avail->curr].clock) {
@@ -938,6 +938,7 @@ static void analyzer_avail_process_pings(
         avail->h[avail->curr].avail = 0;
         avail->h[avail->curr].progress = interval_start;
         avail->h[avail->curr].clock = interval_start;
+        avail->value_last = 0;
         avail->clock_last = 0;
         
         zabbix_log(LOG_LEVEL_INFORMATION,
@@ -946,7 +947,6 @@ static void analyzer_avail_process_pings(
             interval, avail->itemid, avail->h[avail->curr].clock,
             avail->h[avail->curr].progress, avail->h[avail->curr].avail, history->clock);
     }
-
 
     // check if item value should be considered as available
     isavailable = DCverify_avail_ping_value(history->itemid, (int) value);
@@ -980,170 +980,171 @@ static void analyzer_avail_process_pings(
     }
 
     avail->h[avail->curr].progress = history->clock;
+    avail->value_last = value;
     avail->clock_last = history->clock;
 }
 
 static void analyzer_avail_process_uptimes(
-        ZBX_DC_HISTORY *history, zbx_hashset_t *analyzer_avail_uptimes, int interval) {
+        ZBX_DC_HISTORY *history, zbx_hashset_t *analyzer_avails, int interval) {
 
-    ZBX_DC_ANALYZER_AVAIL *uptime, *uptime_tmp;
+    ZBX_DC_ANALYZER_AVAIL *avail, *avail_tmp;
     int interval_start, prev_interval_end;
-    zbx_uint64_t history_uptime;
+    zbx_uint64_t value;
     
-    uptime = (ZBX_DC_ANALYZER_AVAIL *) zbx_hashset_search(analyzer_avail_uptimes, &history->itemid);
+    avail = (ZBX_DC_ANALYZER_AVAIL *) zbx_hashset_search(analyzer_avails, &history->itemid);
     
-    if (NULL == uptime) {
-        if (DCis_avail_uptime(history->itemid)) {
-            uptime_tmp = (ZBX_DC_ANALYZER_AVAIL *) malloc(sizeof(ZBX_DC_ANALYZER_AVAIL));
-            uptime_tmp->itemid = history->itemid;
-            uptime_tmp->value_last = 0;
-            uptime_tmp->clock_last = 0;
-            uptime_tmp->h[0].avail = 0;
-            uptime_tmp->h[0].progress = 0;
-            uptime_tmp->h[0].clock = 0;
-            uptime_tmp->h[1].avail = 0;
-            uptime_tmp->h[1].progress = 0;
-            uptime_tmp->h[1].clock = 0;
-            uptime_tmp->curr = 0;
-            uptime_tmp->prev = 1;
-            
-            uptime = zbx_hashset_insert(analyzer_avail_uptimes, uptime_tmp, sizeof(ZBX_DC_ANALYZER_AVAIL));
-            free(uptime_tmp);
-            if (NULL == uptime) {
-                zabbix_log(LOG_LEVEL_INFORMATION, 
-                    "[ANALYZER/UPTIME%d] failed crateing new avail uptime, itemid: " ZBX_FS_UI64,
-                    interval, history->itemid);
-                return;
-            }
-
-            zabbix_log(LOG_LEVEL_INFORMATION, 
-                "[ANALYZER/UPTIME%d] item added, itemid: " ZBX_FS_UI64,
-                interval, history->itemid);
-        } else {
+    if (NULL == avail) {
+        if (!DCis_avail_uptime(history->itemid)) {
             return;
         }
+
+        avail_tmp = (ZBX_DC_ANALYZER_AVAIL *) malloc(sizeof(ZBX_DC_ANALYZER_AVAIL));
+        avail_tmp->itemid = history->itemid;
+        avail_tmp->value_last = 0;
+        avail_tmp->clock_last = 0;
+        avail_tmp->h[0].avail = 0;
+        avail_tmp->h[0].progress = 0;
+        avail_tmp->h[0].clock = 0;
+        avail_tmp->h[1].avail = 0;
+        avail_tmp->h[1].progress = 0;
+        avail_tmp->h[1].clock = 0;
+        avail_tmp->curr = 0;
+        avail_tmp->prev = 1;
+        
+        avail = zbx_hashset_insert(analyzer_avails, avail_tmp, sizeof(ZBX_DC_ANALYZER_AVAIL));
+        free(avail_tmp);
+        if (NULL == avail) {
+            zabbix_log(LOG_LEVEL_INFORMATION, 
+                "[ANALYZER/UPTIME%d] failed crateing new avail avail, itemid: " ZBX_FS_UI64,
+                interval, history->itemid);
+            return;
+        }
+
+        zabbix_log(LOG_LEVEL_INFORMATION, 
+            "[ANALYZER/UPTIME%d] item added, itemid: " ZBX_FS_UI64,
+            interval, history->itemid);
     }
 
+    if (history->clock < avail->clock_last) {
+        // out of order data point
+        zabbix_log(LOG_LEVEL_INFORMATION,
+            "[ANALYZER/UPTIME%d] out of order data point, "
+            "itemid: " ZBX_FS_UI64 ", avail clock: %d, progress: %d, avail: %f, data point clock: %d",
+            interval, avail->itemid, avail->h[avail->curr].clock,
+            avail->h[avail->curr].progress, avail->h[avail->curr].avail, history->clock);
+        return;
+    }
+    
 	interval_start = history->clock - (history->clock % interval);
     prev_interval_end = interval_start - 1;
     
     switch (history->value_type)
 	{
 		case ITEM_VALUE_TYPE_FLOAT:
-            history_uptime = (zbx_uint64_t) history->value.dbl;
+            value = (zbx_uint64_t) history->value.dbl;
 			break;
 		case ITEM_VALUE_TYPE_UINT64:
-			history_uptime = history->value.ui64;
+			value = history->value.ui64;
 			break;
         default:
-            zabbix_log(LOG_LEVEL_INFORMATION, "Invalid uptime item value type: %d",
+            zabbix_log(LOG_LEVEL_INFORMATION, "Invalid avail item value type: %d",
                 history->value_type);
             return;
 	}
     
-    if (history->clock < uptime->clock_last) {
-        // out of order data point
-        zabbix_log(LOG_LEVEL_INFORMATION,
-            "[ANALYZER/UPTIME%d] out of order data point, "
-            "itemid: " ZBX_FS_UI64 ", avail clock: %d, progress: %d, avail: %f, data point clock: %d",
-            interval, uptime->itemid, uptime->h[uptime->curr].clock,
-            uptime->h[uptime->curr].progress, uptime->h[uptime->curr].avail, history->clock);
-        return;
-    }
-    
     // new hour
-    if (interval_start > uptime->h[uptime->curr].clock) {
-        if (uptime->h[uptime->prev].clock != 0
-                && uptime->h[uptime->prev].progress < prev_interval_end) {
+    if (interval_start > avail->h[avail->curr].clock) {
+        if (avail->h[avail->prev].clock != 0
+                && avail->h[avail->prev].progress < prev_interval_end) {
             // send unfinished analyze
             zabbix_log(LOG_LEVEL_INFORMATION, 
                 "[ANALYZER/UPTIME%d] unfinished analyze, "
                 "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f",
-                interval, uptime->itemid, uptime->h[uptime->prev].clock,
-                uptime->h[uptime->prev].progress, uptime->h[uptime->prev].avail);
+                interval, avail->itemid, avail->h[avail->prev].clock,
+                avail->h[avail->prev].progress, avail->h[avail->prev].avail);
             LOCK_ANALYZER_AVAIL_Q;
-            analyzer_avail_queue(uptime, interval);
+            analyzer_avail_queue(avail, interval);
             UNLOCK_ANALYZER_AVAIL_Q;
         }
 
-        if (0 == uptime->curr) {
-            uptime->curr = 1;
-            uptime->prev = 0;
+        if (0 == avail->curr) {
+            avail->curr = 1;
+            avail->prev = 0;
         } else {
-            uptime->curr = 0;
-            uptime->prev = 1;
+            avail->curr = 0;
+            avail->prev = 1;
         }
         
-        uptime->h[uptime->curr].avail = 0;
-        uptime->h[uptime->curr].progress = interval_start;
-        uptime->h[uptime->curr].clock = interval_start;
-        uptime->value_last = 0;
-        uptime->clock_last = 0;
+        avail->h[avail->curr].avail = 0;
+        avail->h[avail->curr].progress = interval_start;
+        avail->h[avail->curr].clock = interval_start;
+        avail->value_last = 0;
+        avail->clock_last = 0;
         
         zabbix_log(LOG_LEVEL_INFORMATION,
             "[ANALYZER/UPTIME%d] new interval begins, "
-            "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, uptime: "
+            "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, avail: "
             ZBX_FS_UI64 ", clock: %d", interval,
-            uptime->itemid, uptime->h[uptime->curr].clock, uptime->h[uptime->curr].progress,
-            uptime->h[uptime->curr].avail, history_uptime, history->clock);
+            avail->itemid, avail->h[avail->curr].clock, avail->h[avail->curr].progress,
+            avail->h[avail->curr].avail, value, history->clock);
     }
     
     // how previous interval should have ended
-    prev_interval_end = uptime->h[uptime->prev].clock + interval - 1;
+    prev_interval_end = avail->h[avail->prev].clock + interval - 1;
     
     // previous hour not finished
-    if (uptime->h[uptime->prev].progress != 0
-            && uptime->h[uptime->prev].progress < prev_interval_end) {
+    if (avail->h[avail->prev].progress != 0
+            && avail->h[avail->prev].progress < prev_interval_end) {
         
-        // if uptime value reaches previous hour
-        if (history_uptime >= (history->clock - prev_interval_end)) {
+        // if avail value reaches previous hour
+        if (value >= (history->clock - prev_interval_end)) {
             int downtime = 
-                (history->clock - history_uptime) - (uptime->h[uptime->prev].progress - 1);
+                (history->clock - value) - (avail->h[avail->prev].progress - 1);
             if (downtime < 0)
                 downtime = 0;            
-            int avail = prev_interval_end - (uptime->h[uptime->prev].progress - 1);
-            uptime->h[uptime->prev].avail += avail - downtime;
+            int avail_time = prev_interval_end - (avail->h[avail->prev].progress - 1);
+            avail->h[avail->prev].avail += avail_time - downtime;
         }
-        uptime->h[uptime->prev].progress = prev_interval_end;
+        avail->h[avail->prev].progress = prev_interval_end;
         zabbix_log(LOG_LEVEL_INFORMATION,
             "[ANALYZER/UPTIME%d] finished prev interval, "
-            "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, uptime: "
+            "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, avail: "
             ZBX_FS_UI64 ", clock: %d", interval,
-            uptime->itemid, uptime->h[uptime->prev].clock, uptime->h[uptime->prev].progress,
-            uptime->h[uptime->prev].avail, history_uptime, history->clock);
+            avail->itemid, avail->h[avail->prev].clock, avail->h[avail->prev].progress,
+            avail->h[avail->prev].avail, value, history->clock);
     }
     
-    // if first uptime during current hour starts after current hour beginning - move progress
-    if ((0 == uptime->clock_last) && (uptime->h[uptime->curr].progress == interval_start)) {
-        int uptime_start = history->clock - history_uptime;
-        if (uptime_start > interval_start) {
-            uptime->h[uptime->curr].progress = uptime_start;
+    // if first avail during current hour starts after current hour beginning - move progress
+    if ((0 == avail->clock_last) && (avail->h[avail->curr].progress == interval_start)) {
+        int avail_start = history->clock - value;
+        if (avail_start > interval_start) {
+            avail->h[avail->curr].progress = avail_start;
             zabbix_log(LOG_LEVEL_INFORMATION,
-                "[ANALYZER/UPTIME%d] first uptime after current interval, "
-                "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, uptime: "
+                "[ANALYZER/UPTIME%d] first avail after current interval, "
+                "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, avail: "
                 ZBX_FS_UI64 ", clock: %d", interval,
-                uptime->itemid, uptime->h[uptime->curr].clock, uptime->h[uptime->curr].progress,
-                uptime->h[uptime->curr].avail, history_uptime, history->clock);
+                avail->itemid, avail->h[avail->curr].clock, avail->h[avail->curr].progress,
+                avail->h[avail->curr].avail, value, history->clock);
         }
     }
     
-    if (history_uptime < uptime->value_last) {
+    if (value < avail->value_last) {
         // machine was down
         zabbix_log(LOG_LEVEL_INFORMATION,
             "[ANALYZER/UPTIME%d] machine down discovered, "
-            "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, uptime: "
+            "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, avail: "
             ZBX_FS_UI64 ", clock: %d", interval,
-            uptime->itemid, uptime->h[uptime->curr].clock, uptime->h[uptime->curr].progress,
-            uptime->h[uptime->curr].avail, history_uptime, history->clock);
+            avail->itemid, avail->h[avail->curr].clock, avail->h[avail->curr].progress,
+            avail->h[avail->curr].avail, value, history->clock);
     } else {
         // avail increases
-        int avail = history->clock - (uptime->h[uptime->curr].progress - 1);
-        uptime->h[uptime->curr].avail += avail;
+        int avail_time = history->clock - (avail->h[avail->curr].progress - 1);
+        avail->h[avail->curr].avail += avail_time;
     }
 
-    uptime->h[uptime->curr].progress = history->clock;
-    uptime->value_last = history_uptime;
-    uptime->clock_last = history->clock;
+    avail->h[avail->curr].progress = history->clock;
+    avail->value_last = value;
+    avail->clock_last = history->clock;
 }
 
 static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, char* name) {
