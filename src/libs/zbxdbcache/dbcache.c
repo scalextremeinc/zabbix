@@ -1033,9 +1033,6 @@ static void analyzer_avail_process(ZBX_DC_HISTORY *history,
             actions->name, interval, history->itemid);
     }
 
-    // zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/%s%d] sleeping...", actions->name, interval);
-    // sleep(120);
-    
     if (history->clock < avail->clock_last) {
         // out of order data point
         zabbix_log(LOG_LEVEL_INFORMATION,
@@ -1321,14 +1318,16 @@ static ZBX_DC_ANALYZER_AVAIL_ACTIONS actions_uptime = {
     analyzer_avail_validate_uptime,
     analyzer_avail_finish_prev_uptime,
     analyzer_avail_increase_uptime,
-    "uptime"};
+    "uptime"
+};
 
 static ZBX_DC_ANALYZER_AVAIL_ACTIONS actions_ping = {
     DCis_avail_ping,
     analyzer_avail_validate_ping,
     analyzer_avail_finish_prev_ping,
     analyzer_avail_increase_ping,
-    "ping"};
+    "ping"
+};
 
 static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
     const char *__function_name = "DCmass_analyze";
