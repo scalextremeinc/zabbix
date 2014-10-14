@@ -98,12 +98,9 @@ static int ANALYZER_AVAIL_INTERVAL2 = 86400;
 // static int ANALYZER_AVAIL_INTERVAL1 = 300;
 // static int ANALYZER_AVAIL_INTERVAL2 = 900;
 
-static int ANALYZER_AVAIL_STORE_INTERVAL = 60;
+static int ANALYZER_AVAIL_STORE_INTERVAL = 30;
 
 static int ANALYZER_AVAIL_PING_FREQ = 120;
-
-static int ANALYZER_AVAIL_TYPE_UPTIME = 1;
-static int ANALYZER_AVAIL_TYPE_PING = 2;
 
 typedef struct
 {
@@ -1221,7 +1218,7 @@ out:
 }
 
 static void analyzer_avail_store_check(zbx_hashset_t *analyzer_avail, int interval,
-        time_t write_interval, char* name) {
+        time_t write_interval, char* name, int force) {
 
     int fd;
     time_t now;
@@ -1239,15 +1236,17 @@ static void analyzer_avail_store_check(zbx_hashset_t *analyzer_avail, int interv
                 buf, strerror(errno));
         return;
     }
-    if (fstat(fd, &stat_result) == -1) {
-        zabbix_log(LOG_LEVEL_ERR,
-                "[ANALYZER/AVAIL] Error fstat avail store, file: %s, error: %s",
-                buf, strerror(errno));
-        close(fd);
-        return;
-    }
 
-    if (stat_result.st_mtime + write_interval < now) {
+    if (!force)
+        if (fstat(fd, &stat_result) == -1) {
+            zabbix_log(LOG_LEVEL_ERR,
+                    "[ANALYZER/AVAIL] Error fstat avail store, file: %s, error: %s",
+                    buf, strerror(errno));
+            close(fd);
+            return;
+        }
+
+    if (force || stat_result.st_mtime + write_interval < now) {
         analyzer_avail_store(analyzer_avail, fd, buf);
         // update file mtime, if there are no avails this prevents trying to store too often
         if (utime(buf, NULL) == -1)
@@ -1380,22 +1379,22 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
     analyzer_avail_store_check(&cache->analyzer_avail_uptimes,
-            ANALYZER_AVAIL_INTERVAL1, ANALYZER_AVAIL_STORE_INTERVAL, "uptime");
+            ANALYZER_AVAIL_INTERVAL1, ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 0);
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_PINGS;
     analyzer_avail_store_check(&cache->analyzer_avail_pings,
-            ANALYZER_AVAIL_INTERVAL1, ANALYZER_AVAIL_STORE_INTERVAL, "ping");
+            ANALYZER_AVAIL_INTERVAL1, ANALYZER_AVAIL_STORE_INTERVAL, "ping", 0);
     UNLOCK_ANALYZER_AVAIL_PINGS;
 
     LOCK_ANALYZER_AVAIL_UPTIMES2;
     analyzer_avail_store_check(&cache->analyzer_avail_uptimes2,
-            ANALYZER_AVAIL_INTERVAL2, ANALYZER_AVAIL_STORE_INTERVAL, "uptime");
+            ANALYZER_AVAIL_INTERVAL2, ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 0);
     UNLOCK_ANALYZER_AVAIL_UPTIMES2;
 
     LOCK_ANALYZER_AVAIL_PINGS2;
     analyzer_avail_store_check(&cache->analyzer_avail_pings2,
-            ANALYZER_AVAIL_INTERVAL2, ANALYZER_AVAIL_STORE_INTERVAL, "ping");
+            ANALYZER_AVAIL_INTERVAL2, ANALYZER_AVAIL_STORE_INTERVAL, "ping", 0);
     UNLOCK_ANALYZER_AVAIL_PINGS2;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
@@ -3972,10 +3971,23 @@ static void	DCsync_all()
 	if (CONFIG_TRENDS_SQL_WRITE && 0 != (daemon_type & ZBX_DAEMON_TYPE_SERVER))
 		DCsync_trends();
     
+    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Flushing avail data...");
+
     analyzer_avail_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL1);
     analyzer_avail_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL1);
     analyzer_avail_check(&cache->analyzer_avail_uptimes2, ANALYZER_AVAIL_INTERVAL2);
     analyzer_avail_check(&cache->analyzer_avail_pings2, ANALYZER_AVAIL_INTERVAL2);
+
+    analyzer_avail_store_check(&cache->analyzer_avail_uptimes,
+            ANALYZER_AVAIL_INTERVAL1, ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 1);
+    analyzer_avail_store_check(&cache->analyzer_avail_pings,
+            ANALYZER_AVAIL_INTERVAL1, ANALYZER_AVAIL_STORE_INTERVAL, "ping", 1);
+    analyzer_avail_store_check(&cache->analyzer_avail_uptimes2,
+            ANALYZER_AVAIL_INTERVAL2, ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 1);
+    analyzer_avail_store_check(&cache->analyzer_avail_pings2,
+            ANALYZER_AVAIL_INTERVAL2, ANALYZER_AVAIL_STORE_INTERVAL, "ping", 1);
+
+    zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Flushed avail data");
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of DCsync_all()");
 }
