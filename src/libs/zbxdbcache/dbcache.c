@@ -1095,7 +1095,7 @@ static void analyzer_avail_process(ZBX_DC_HISTORY *history,
 }
 
 static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, char* name) {
-    ZBX_DC_ANALYZER_AVAIL *avail, *insert_result;
+    ZBX_DC_ANALYZER_AVAIL avail, *insert_result;
     FILE *fp;
     char buf[1024];
     size_t count = 0;
@@ -1113,15 +1113,12 @@ static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, cha
     }
 
     while (1) { 
-        avail = (ZBX_DC_ANALYZER_AVAIL *) malloc(sizeof(ZBX_DC_ANALYZER_AVAIL));
-
         scanf_count = fscanf(fp, ZBX_FS_UI64 ":" ZBX_FS_UI64 ":%d:%d:%d:%lf:%d:%d:%lf:%d:%d\n",
-                &avail->itemid, &avail->value_last, &avail->clock_last, &avail->curr, &avail->prev,
-                &(avail->slot[0].avail), &(avail->slot[0].progress), &(avail->slot[0].clock),
-                &(avail->slot[1].avail), &(avail->slot[1].progress), &(avail->slot[1].clock));
+                &avail.itemid, &avail.value_last, &avail.clock_last, &avail.curr, &avail.prev,
+                &(avail.slot[0].avail), &(avail.slot[0].progress), &(avail.slot[0].clock),
+                &(avail.slot[1].avail), &(avail.slot[1].progress), &(avail.slot[1].clock));
 
         if (EOF == scanf_count && ferror(fp)) {
-            free(avail);
             goto error_read;
         }
 
@@ -1129,13 +1126,12 @@ static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, cha
             zabbix_log(LOG_LEVEL_INFORMATION,
                     "[ANALYZER/AVAIL%d] loaded: " ZBX_FS_UI64 ":" ZBX_FS_UI64
                     ":%d:%d:%d:%lf:%d:%d:%lf:%d:%d",
-                    interval, avail->itemid, avail->value_last,
-                    avail->clock_last, avail->curr, avail->prev,
-                    avail->slot[0].avail, avail->slot[0].progress, avail->slot[0].clock,
-                    avail->slot[1].avail, avail->slot[1].progress, avail->slot[1].clock);
+                    interval, avail.itemid, avail.value_last,
+                    avail.clock_last, avail.curr, avail.prev,
+                    avail.slot[0].avail, avail.slot[0].progress, avail.slot[0].clock,
+                    avail.slot[1].avail, avail.slot[1].progress, avail.slot[1].clock);
 
-            insert_result = zbx_hashset_insert(analyzer_avail, avail, sizeof(ZBX_DC_ANALYZER_AVAIL));
-            free(avail);
+            insert_result = zbx_hashset_insert(analyzer_avail, &avail, sizeof(ZBX_DC_ANALYZER_AVAIL));
             if (NULL == insert_result) {
                 zabbix_log(LOG_LEVEL_INFORMATION,
                         "[ANALYZER/AVAIL%d] failed crateing new avail", interval);
