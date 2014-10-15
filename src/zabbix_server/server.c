@@ -210,6 +210,7 @@ int CONFIG_TRENDS_SQL_WRITE = 1;
 int CONFIG_AUTOCREATE_LIMIT = 1;
 // 0 means no limit
 int CONFIG_TRAPPER_PRPCESSING_LIMIT = 0;
+char* CONFIG_ANALYZER_AVAIL_DIR = NULL;
 
 /* mutex for node syncs */
 ZBX_MUTEX	node_sync_access;
@@ -262,6 +263,9 @@ static void	zbx_set_defaults()
 
 	if (1 == CONFIG_DISABLE_HOUSEKEEPING)
 		CONFIG_HOUSEKEEPER_FORKS = 0;
+
+	if (NULL == CONFIG_ANALYZER_AVAIL_DIR)
+		CONFIG_ANALYZER_AVAIL_DIR = zbx_strdup(CONFIG_ANALYZER_AVAIL_DIR, "/tmp");
 }
 
 /******************************************************************************
@@ -455,6 +459,8 @@ static void	zbx_load_config()
 			PARM_OPT,	0,			1000},
         {"TrapperProcessingLimit",		&CONFIG_TRAPPER_PRPCESSING_LIMIT,		TYPE_INT,
 			PARM_OPT,	0,			100000},
+        {"AnalyzerAvailDir",		&CONFIG_ANALYZER_AVAIL_DIR,		TYPE_STRING,
+			PARM_OPT,	0,			0},
 		{NULL}
 	};
 

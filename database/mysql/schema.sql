@@ -874,12 +874,14 @@ CREATE INDEX `alerts_4` ON `alerts` (`status`,`retries`);
 CREATE INDEX `alerts_5` ON `alerts` (`mediatypeid`);
 CREATE INDEX `alerts_6` ON `alerts` (`userid`);
 CREATE TABLE `history` (
-	`itemid`                 bigint unsigned                           NOT NULL,
-	`clock`                  integer         DEFAULT '0'               NOT NULL,
-	`value`                  double(16,4)    DEFAULT '0.0000'          NOT NULL,
-	`ns`                     integer         DEFAULT '0'               NOT NULL
-) ENGINE=TokuDB;
-CREATE INDEX `history_1` ON `history` (`itemid`,`clock`);
+  `itemid` bigint(20) unsigned NOT NULL,
+  `clock` int(11) NOT NULL DEFAULT '0',
+  `value` double(20,4) NOT NULL DEFAULT '0.0000',
+  `ns` int(11) NOT NULL DEFAULT '0',
+  `hour` int(11) NOT NULL DEFAULT '0',
+  KEY `history_1` (`itemid`,`clock`),
+  KEY `history_2` (`hour`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 CREATE TABLE `history_sync` (
 	`id`                     bigint unsigned                           NOT NULL auto_increment unique,
 	`nodeid`                 integer                                   NOT NULL,

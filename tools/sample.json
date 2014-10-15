@@ -1,0 +1,222 @@
+{
+    "data": [
+        {
+            "clock": 1411639910, 
+            "host": "A369C40052", 
+            "key": "system.cpu.switches", 
+            "ns": 431660790, 
+            "value": "27080"
+        }, 
+        {
+            "clock": 1411639910, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg5]", 
+            "ns": 432175552, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639910, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg1]", 
+            "ns": 432662089, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639910, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg15]", 
+            "ns": 433177687, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639910, 
+            "host": "A369C40052", 
+            "key": "system.cpu.intr", 
+            "ns": 433939314, 
+            "value": "8123"
+        }, 
+        {
+            "clock": 1411639910, 
+            "host": "A369C40052", 
+            "key": "agent.ping", 
+            "ns": 434415289, 
+            "value": "1"
+        }, 
+        {
+            "clock": 1411639911, 
+            "host": "A369C40052", 
+            "key": "system.cpu.switches", 
+            "ns": 435215956, 
+            "value": "27139"
+        }, 
+        {
+            "clock": 1411639911, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg5]", 
+            "ns": 435349832, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639911, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg1]", 
+            "ns": 435479703, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639911, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg15]", 
+            "ns": 435594120, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639911, 
+            "host": "A369C40052", 
+            "key": "system.cpu.intr", 
+            "ns": 435724311, 
+            "value": "8145"
+        }, 
+        {
+            "clock": 1411639911, 
+            "host": "A369C40052", 
+            "key": "agent.ping", 
+            "ns": 435831695, 
+            "value": "1"
+        }, 
+        {
+            "clock": 1411639912, 
+            "host": "A369C40052", 
+            "key": "system.cpu.switches", 
+            "ns": 437351572, 
+            "value": "27203"
+        }, 
+        {
+            "clock": 1411639912, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg5]", 
+            "ns": 437860030, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639912, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg1]", 
+            "ns": 438321934, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639912, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg15]", 
+            "ns": 438815230, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639912, 
+            "host": "A369C40052", 
+            "key": "system.cpu.intr", 
+            "ns": 439320667, 
+            "value": "8168"
+        }, 
+        {
+            "clock": 1411639912, 
+            "host": "A369C40052", 
+            "key": "agent.ping", 
+            "ns": 439720277, 
+            "value": "1"
+        }, 
+        {
+            "clock": 1411639913, 
+            "host": "A369C40052", 
+            "key": "system.cpu.switches", 
+            "ns": 441072311, 
+            "value": "27262"
+        }, 
+        {
+            "clock": 1411639913, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg5]", 
+            "ns": 441396206, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639913, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg1]", 
+            "ns": 441800638, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639913, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg15]", 
+            "ns": 442212550, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639913, 
+            "host": "A369C40052", 
+            "key": "system.cpu.intr", 
+            "ns": 442503645, 
+            "value": "8190"
+        }, 
+        {
+            "clock": 1411639913, 
+            "host": "A369C40052", 
+            "key": "system.uptime", 
+            "ns": 442657487, 
+            "value": "41"
+        }, 
+        {
+            "clock": 1411639913, 
+            "host": "A369C40052", 
+            "key": "agent.ping", 
+            "ns": 442773206, 
+            "value": "1"
+        }, 
+        {
+            "clock": 1411639914, 
+            "host": "A369C40052", 
+            "key": "system.cpu.switches", 
+            "ns": 444159341, 
+            "value": "27319"
+        }, 
+        {
+            "clock": 1411639914, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg5]", 
+            "ns": 444798677, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639914, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg1]", 
+            "ns": 445242396, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639914, 
+            "host": "A369C40052", 
+            "key": "system.cpu.load[,avg15]", 
+            "ns": 445826356, 
+            "value": "0.000000"
+        }, 
+        {
+            "clock": 1411639914, 
+            "host": "A369C40052", 
+            "key": "system.cpu.intr", 
+            "ns": 446342725, 
+            "value": "8210"
+        }, 
+        {
+            "clock": 1411639914, 
+            "host": "A369C40052", 
+            "key": "agent.ping", 
+            "ns": 446745248, 
+            "value": "1"
+        }
+    ], 
+    "request": "agent data"
+}

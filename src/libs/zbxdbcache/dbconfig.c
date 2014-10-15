@@ -335,7 +335,16 @@ typedef struct
 }
 ZBX_DC_AUTOCREATE;
 
+#define ZBX_DC_AVAIL_CONF_MAX_PARAMS 16
 
+typedef struct
+{
+    zbx_uint64_t itemid;
+    int type;
+    size_t params_len;
+    int params[];
+}
+ZBX_DC_AVAIL_CONF;
 
 typedef struct
 {
@@ -369,6 +378,7 @@ typedef struct
 	zbx_hashset_t		interface_snmpaddrs;	/* addr, interfaceids for SNMP interfaces */
 	zbx_hashset_t		interface_snmpitems;	/* interfaceid, itemids for SNMP trap items */
     zbx_hashset_t		auto_create;
+    zbx_hashset_t		avail_conf;
     zbx_hashset_t		historyitems;
 	zbx_binary_heap_t	queues[ZBX_POLLER_TYPE_COUNT];
 	zbx_binary_heap_t	pqueue;
@@ -384,6 +394,7 @@ static zbx_mem_info_t	*config_mem;
 ZBX_MEM_FUNC_IMPL(__config, config_mem);
 
 static ZBX_MUTEX autocreate_mutex;
+static ZBX_MUTEX avail_mutex;
 static ZBX_MUTEX autocreate_sem;
 
 static void	poller_by_item(zbx_uint64_t itemid, zbx_uint64_t proxy_hostid,
@@ -753,6 +764,61 @@ static void DCsync_autocreate(DB_RESULT result) {
         zbx_hashset_insert(&config->auto_create, &autocreate_local, sizeof(ZBX_DC_AUTOCREATE));
     }
     zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Sync autocreate: num_data %d", config->auto_create.num_data);
+}
+
+static void DCsync_avail(DB_RESULT result) {
+    DB_ROW row;
+    int i, j;
+    char tmp;
+
+    ZBX_DC_AVAIL_CONF avail_local, *avail;
+    int avail_local_params[ZBX_DC_AVAIL_CONF_MAX_PARAMS];
+
+    zbx_hashset_iter_t iter;
+    zbx_hashset_iter_reset(&config->avail_conf, &iter);
+    
+    zbx_hashset_clear(&config->avail_conf);
+    while (NULL != (row = DBfetch(result))) {
+        avail_local.itemid = atoi(row[0]);
+        avail_local.type = atoi(row[1]);
+
+        // parse parameters
+        avail_local.params_len = 0;
+
+        if (row[2] != NULL) {
+            for (i = 0, j = 0; i <= strlen(row[2]); i++) {
+                if ((row[2][i] == ',' || row[2][i] == '\0') && i != j) {
+                    tmp = row[2][i];
+                    row[2][i] = '\0';
+                    avail_local_params[avail_local.params_len] = atoi(row[2] + j);
+                    // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] found param: %d",
+                    //     avail_local_params[avail_local.params_len]);
+                    row[2][i] = tmp;
+                    j = i + 1;
+                    avail_local.params_len++;
+                }
+                if (avail_local.params_len == ZBX_DC_AVAIL_CONF_MAX_PARAMS) {
+                    zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] max params limit reached, "
+                        "limit: %d, itemid: %d", ZBX_DC_AVAIL_CONF_MAX_PARAMS, avail_local.itemid);
+                    break;
+                }
+            }
+        }
+
+        avail = (ZBX_DC_AVAIL_CONF*) malloc(sizeof(ZBX_DC_AVAIL_CONF) + sizeof(int) * avail_local.params_len);
+        memcpy(avail, &avail_local, sizeof(ZBX_DC_AVAIL_CONF));
+        if (avail_local.params_len > 0)
+            memcpy(avail->params, avail_local_params, sizeof(int) * avail_local.params_len);
+
+        // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] Sync avail: itemid: %d", avail_local.itemid);
+
+        zbx_hashset_insert(&config->avail_conf, avail,
+                sizeof(ZBX_DC_AVAIL_CONF) + sizeof(int) * avail_local.params_len);
+
+        // free allocated memory as hashset insert copies data, which is stored in shared mem
+        free(avail);
+    }
+    zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] Sync avail: num_data %d", config->avail_conf.num_data);
 }
 
 static void DCsync_historyitems()
@@ -2347,6 +2413,7 @@ void	DCsync_configuration()
 	DB_RESULT		if_result;
 	DB_RESULT		conf_result;
     DB_RESULT		autocreate_result;
+    DB_RESULT		avail_result;
 
 	int			i;
 	double			sec, csec, isec, tsec, dsec, fsec, hsec, htsec, gmsec, hmsec, ifsec, ssec;
@@ -2491,6 +2558,13 @@ void	DCsync_configuration()
 				DB_NODE,
 			DBnode_local("app"));
 
+    avail_result = DBselect(
+			"select itemid,type,parameters"
+			" from avail"
+			" where enabled=1"
+				DB_NODE,
+			DBnode_local("itemid"));
+
 	START_SYNC;
 
 	sec = zbx_time();
@@ -2508,6 +2582,10 @@ void	DCsync_configuration()
     zbx_mutex_lock(&autocreate_mutex);
     DCsync_autocreate(autocreate_result);
     zbx_mutex_unlock(&autocreate_mutex);
+
+    zbx_mutex_lock(&avail_mutex);
+    DCsync_avail(avail_result);
+    zbx_mutex_unlock(&avail_mutex);
     
     DCsync_historyitems();
 	ssec = zbx_time() - sec;
@@ -2892,6 +2970,11 @@ void	init_configuration_cache()
 		zbx_error("Unable to create mutex for autocreare");
 		exit(FAIL);
 	}
+    if (ZBX_MUTEX_ERROR == zbx_mutex_create_force(&avail_mutex, ZBX_MUTEX_AVAIL_CONF))
+	{
+		zbx_error("Unable to create mutex for avail conf");
+		exit(FAIL);
+	}
     if (ZBX_MUTEX_ERROR == zbx_mutex_create_force(&autocreate_sem, ZBX_SEM_AUTOCREATE))
 	{
 		zbx_error("Unable to create sem for autocreare");
@@ -2942,6 +3025,7 @@ void	init_configuration_cache()
 	CREATE_HASHSET(config->interface_snmpitems);
 	CREATE_HASHSET(config->historyitems);
     CREATE_HASHSET(config->auto_create);
+    CREATE_HASHSET(config->avail_conf);
 
 	CREATE_HASHSET_EXT(config->items_hk, __config_item_hk_hash, __config_item_hk_compare);
 	CREATE_HASHSET_EXT(config->hosts_ph, __config_host_ph_hash, __config_host_ph_compare);
@@ -3020,6 +3104,7 @@ void	free_configuration_cache()
 
 	zbx_mutex_destroy(&config_lock);
     zbx_mutex_destroy(&autocreate_mutex);
+    zbx_mutex_destroy(&avail_mutex);
     zbx_mutex_destroy(&autocreate_sem);
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
@@ -4958,33 +5043,67 @@ int DChas_triggers(zbx_uint64_t itemid) {
 
 int DCis_avail_uptime(zbx_uint64_t itemid) {
     ZBX_DC_ITEM *item;
+    ZBX_DC_AVAIL_CONF *avail;
     int result = 0;
     
     LOCK_CACHE;
-    
+
     item = zbx_hashset_search(&config->items, &itemid);
-    if (NULL != item && (0 == strcmp("system.uptime", item->key)))
-        result = 1;
-    else if (NULL != item && (ZBX_FLAG_AVAIL_UPTIME == (ZBX_FLAG_AVAIL_UPTIME & item->flags)))
-        result = 1;
-    
+    result = NULL != item && (0 == strcmp("system.uptime", item->key));
+
     UNLOCK_CACHE;
-    
+
+    if (result)
+        return result;
+   
+    zbx_mutex_lock(&avail_mutex);
+
+    avail = zbx_hashset_search(&config->avail_conf, &itemid);
+    result = NULL != avail && 0 == avail->type;
+
+    zbx_mutex_unlock(&avail_mutex);
+
     return result;
 }
 
 int DCis_avail_ping(zbx_uint64_t itemid) {
-    ZBX_DC_ITEM *item;
     int result = 0;
-    
-    LOCK_CACHE;
-    
-    item = zbx_hashset_search(&config->items, &itemid);
+    ZBX_DC_AVAIL_CONF *avail_conf;
 
-    if (NULL != item && (ZBX_FLAG_AVAIL_PING == (ZBX_FLAG_AVAIL_PING & item->flags)))
-        result = 1;
+    zbx_mutex_lock(&avail_mutex);
 
-    UNLOCK_CACHE;
+    avail_conf = zbx_hashset_search(&config->avail_conf, &itemid);
+    result = NULL != avail_conf && 1 == avail_conf->type;
+
+    zbx_mutex_unlock(&avail_mutex);
+
+    return result;
+}
+
+int DCverify_avail_ping_value(zbx_uint64_t itemid, int value) {
+    ZBX_DC_AVAIL_CONF *avail_conf;
+    int i, result = 0;
+    
+    zbx_mutex_lock(&avail_mutex);
+    avail_conf = zbx_hashset_search(&config->avail_conf, &itemid);
+
+    if (NULL != avail_conf && 1 == avail_conf->type) {
+        // no value config params means each data point is considered as available
+        // meaning service is up as long as data is comming
+        if (0 == avail_conf->params_len)
+            result =  1;
+
+        // check if value matches any of configured available values
+        for (i = 0; i < avail_conf->params_len; i++) {
+            if (value == avail_conf->params[i]) {
+                // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] DCverify_avail_ping_value itemid: %d, value: %d, param: %d", itemid, value, avail_conf->params[i]);
+                result = 1;
+                break;
+            }
+        }
+    }
+
+    zbx_mutex_unlock(&avail_mutex);
 
     return result;
 }
