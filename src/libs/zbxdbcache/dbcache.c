@@ -91,12 +91,13 @@ static int ZBX_ANALYZER_AVAIL_Q_SIZE = 0;
 
 #define ZBX_IDS_SIZE	10
 
-static int ANALYZER_AVAIL_INTERVAL1 = 3600;
-static int ANALYZER_AVAIL_INTERVAL2 = 86400;
+extern int CONFIG_ANALYZER_AVAIL_INTERVAL1;
+extern int CONFIG_ANALYZER_AVAIL_INTERVAL2;
+extern int CONFIG_ANALYZER_AVAIL_STORE_INTERVAL;
+extern int CONFIG_ANALYZER_AVAIL_PING_FREQ;
 
-static int ANALYZER_AVAIL_STORE_INTERVAL = 30;
-
-static int ANALYZER_AVAIL_PING_FREQ = 120;
+extern char* CONFIG_TARGET_TRENDS;
+extern char* CONFIG_TARGET_AVAIL;
 
 typedef struct
 {
@@ -950,7 +951,7 @@ static void analyzer_avail_finish_prev_ping(
         int prev_interval_end, zbx_uint64_t value, int isvalid) {
 
     // if last hour ping was not too far in the past
-    if (isvalid && avail->slot[avail->prev].progress > history->clock - ANALYZER_AVAIL_PING_FREQ)
+    if (isvalid && avail->slot[avail->prev].progress > history->clock - CONFIG_ANALYZER_AVAIL_PING_FREQ)
         avail->slot[avail->prev].avail += prev_interval_end - avail->slot[avail->prev].progress;
 
     avail->slot[avail->prev].progress = prev_interval_end;
@@ -990,7 +991,7 @@ static void analyzer_avail_increase_uptime(ZBX_DC_ANALYZER_AVAIL *avail, ZBX_DC_
 static void analyzer_avail_increase_ping(ZBX_DC_ANALYZER_AVAIL *avail, ZBX_DC_HISTORY *history,
         int interval_start, zbx_uint64_t value, int isvalid, int interval) {
     // if previous ping is within ping max freq increase availability
-    if (isvalid && avail->slot[avail->curr].progress > history->clock - ANALYZER_AVAIL_PING_FREQ) {
+    if (isvalid && avail->slot[avail->curr].progress > history->clock - CONFIG_ANALYZER_AVAIL_PING_FREQ) {
         // count first second too
         if (0 == avail->slot[avail->curr].avail)
             avail->slot[avail->curr].avail++;
@@ -1329,64 +1330,64 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 	for (i = 0; i < history_num; i++) {
         LOCK_ANALYZER_AVAIL_UPTIMES;
 		analyzer_avail_process(&history[i],
-                &cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL1, &actions_uptime);
+                &cache->analyzer_avail_uptimes, CONFIG_ANALYZER_AVAIL_INTERVAL1, &actions_uptime);
         UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
         LOCK_ANALYZER_AVAIL_PINGS;
 		analyzer_avail_process(&history[i],
-                &cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL1, &actions_ping);
+                &cache->analyzer_avail_pings, CONFIG_ANALYZER_AVAIL_INTERVAL1, &actions_ping);
         UNLOCK_ANALYZER_AVAIL_PINGS;
 
         // 24h
         LOCK_ANALYZER_AVAIL_UPTIMES2;
 		analyzer_avail_process(&history[i],
-                &cache->analyzer_avail_uptimes2, ANALYZER_AVAIL_INTERVAL2, &actions_uptime);
+                &cache->analyzer_avail_uptimes2, CONFIG_ANALYZER_AVAIL_INTERVAL2, &actions_uptime);
         UNLOCK_ANALYZER_AVAIL_UPTIMES2;
 
         LOCK_ANALYZER_AVAIL_PINGS2;
 		analyzer_avail_process(&history[i],
-                &cache->analyzer_avail_pings2, ANALYZER_AVAIL_INTERVAL2, &actions_ping);
+                &cache->analyzer_avail_pings2, CONFIG_ANALYZER_AVAIL_INTERVAL2, &actions_ping);
         UNLOCK_ANALYZER_AVAIL_PINGS2;
 	}
     
 	LOCK_ANALYZER_AVAIL_UPTIMES;
-    analyzer_avail_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL1);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes, CONFIG_ANALYZER_AVAIL_INTERVAL1);
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
 	LOCK_ANALYZER_AVAIL_PINGS;
-    analyzer_avail_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL1);
+    analyzer_avail_check(&cache->analyzer_avail_pings, CONFIG_ANALYZER_AVAIL_INTERVAL1);
     UNLOCK_ANALYZER_AVAIL_PINGS;
 
     // 24h
 
 	LOCK_ANALYZER_AVAIL_UPTIMES2;
-    analyzer_avail_check(&cache->analyzer_avail_uptimes2, ANALYZER_AVAIL_INTERVAL2);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes2, CONFIG_ANALYZER_AVAIL_INTERVAL2);
     UNLOCK_ANALYZER_AVAIL_UPTIMES2;
 
 	LOCK_ANALYZER_AVAIL_PINGS2;
-    analyzer_avail_check(&cache->analyzer_avail_pings2, ANALYZER_AVAIL_INTERVAL2);
+    analyzer_avail_check(&cache->analyzer_avail_pings2, CONFIG_ANALYZER_AVAIL_INTERVAL2);
     UNLOCK_ANALYZER_AVAIL_PINGS2;
 
     // try storing
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
     analyzer_avail_store_check(&cache->analyzer_avail_uptimes,
-            ANALYZER_AVAIL_INTERVAL1, ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 0);
+            CONFIG_ANALYZER_AVAIL_INTERVAL1, CONFIG_ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 0);
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_PINGS;
     analyzer_avail_store_check(&cache->analyzer_avail_pings,
-            ANALYZER_AVAIL_INTERVAL1, ANALYZER_AVAIL_STORE_INTERVAL, "ping", 0);
+            CONFIG_ANALYZER_AVAIL_INTERVAL1, CONFIG_ANALYZER_AVAIL_STORE_INTERVAL, "ping", 0);
     UNLOCK_ANALYZER_AVAIL_PINGS;
 
     LOCK_ANALYZER_AVAIL_UPTIMES2;
     analyzer_avail_store_check(&cache->analyzer_avail_uptimes2,
-            ANALYZER_AVAIL_INTERVAL2, ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 0);
+            CONFIG_ANALYZER_AVAIL_INTERVAL2, CONFIG_ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 0);
     UNLOCK_ANALYZER_AVAIL_UPTIMES2;
 
     LOCK_ANALYZER_AVAIL_PINGS2;
     analyzer_avail_store_check(&cache->analyzer_avail_pings2,
-            ANALYZER_AVAIL_INTERVAL2, ANALYZER_AVAIL_STORE_INTERVAL, "ping", 0);
+            CONFIG_ANALYZER_AVAIL_INTERVAL2, CONFIG_ANALYZER_AVAIL_STORE_INTERVAL, "ping", 0);
     UNLOCK_ANALYZER_AVAIL_PINGS2;
 
 	zabbix_log(LOG_LEVEL_DEBUG, "End of %s()", __function_name);
@@ -1395,24 +1396,24 @@ static void DCmass_analyze(ZBX_DC_HISTORY *history, int history_num) {
 static void analyzer_avail_load_all() {
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_uptimes.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL1, "uptime");
+        analyzer_avail_load(&cache->analyzer_avail_uptimes, CONFIG_ANALYZER_AVAIL_INTERVAL1, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_pings.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL1, "ping");
+        analyzer_avail_load(&cache->analyzer_avail_pings, CONFIG_ANALYZER_AVAIL_INTERVAL1, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     // 24 h
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_uptimes2.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_uptimes2, ANALYZER_AVAIL_INTERVAL2, "uptime");
+        analyzer_avail_load(&cache->analyzer_avail_uptimes2, CONFIG_ANALYZER_AVAIL_INTERVAL2, "uptime");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 
     LOCK_ANALYZER_AVAIL_UPTIMES;
     if (cache->analyzer_avail_pings2.num_data == 0)
-        analyzer_avail_load(&cache->analyzer_avail_pings2, ANALYZER_AVAIL_INTERVAL2, "ping");
+        analyzer_avail_load(&cache->analyzer_avail_pings2, CONFIG_ANALYZER_AVAIL_INTERVAL2, "ping");
     UNLOCK_ANALYZER_AVAIL_UPTIMES;
 }
 
@@ -1472,8 +1473,8 @@ static void analyzer_avail_to_json(struct zbx_json *j,
      
     zbx_json_init(j, ZBX_JSON_STAT_BUF_LEN);
     
-    // this is information for worker where to store this data (it goes to nosql tsdb)
-    // zbx_json_addstring(j, "target", "trends", ZBX_JSON_TYPE_STRING);
+    // this is information for worker where to store this data
+    zbx_json_addstring(j, "target", CONFIG_TARGET_AVAIL, ZBX_JSON_TYPE_STRING);
         
     zbx_json_addarray(j, ZBX_PROTO_TAG_DATA);
     
@@ -1604,8 +1605,8 @@ static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_
      
     zbx_json_init(j, ZBX_JSON_STAT_BUF_LEN);
     
-    // this is information for worker where to store this data (it goes to nosql tsdb)
-    zbx_json_addstring(j, "target", "trends", ZBX_JSON_TYPE_STRING);
+    // this is information for worker where to store this data
+    zbx_json_addstring(j, "target", CONFIG_TARGET_TRENDS, ZBX_JSON_TYPE_STRING);
         
     zbx_json_addarray(j, ZBX_PROTO_TAG_DATA);
     
@@ -3965,19 +3966,19 @@ static void	DCsync_all()
     
     zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Flushing avail data...");
 
-    analyzer_avail_check(&cache->analyzer_avail_uptimes, ANALYZER_AVAIL_INTERVAL1);
-    analyzer_avail_check(&cache->analyzer_avail_pings, ANALYZER_AVAIL_INTERVAL1);
-    analyzer_avail_check(&cache->analyzer_avail_uptimes2, ANALYZER_AVAIL_INTERVAL2);
-    analyzer_avail_check(&cache->analyzer_avail_pings2, ANALYZER_AVAIL_INTERVAL2);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes, CONFIG_ANALYZER_AVAIL_INTERVAL1);
+    analyzer_avail_check(&cache->analyzer_avail_pings, CONFIG_ANALYZER_AVAIL_INTERVAL1);
+    analyzer_avail_check(&cache->analyzer_avail_uptimes2, CONFIG_ANALYZER_AVAIL_INTERVAL2);
+    analyzer_avail_check(&cache->analyzer_avail_pings2, CONFIG_ANALYZER_AVAIL_INTERVAL2);
 
     analyzer_avail_store_check(&cache->analyzer_avail_uptimes,
-            ANALYZER_AVAIL_INTERVAL1, ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 1);
+            CONFIG_ANALYZER_AVAIL_INTERVAL1, CONFIG_ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 1);
     analyzer_avail_store_check(&cache->analyzer_avail_pings,
-            ANALYZER_AVAIL_INTERVAL1, ANALYZER_AVAIL_STORE_INTERVAL, "ping", 1);
+            CONFIG_ANALYZER_AVAIL_INTERVAL1, CONFIG_ANALYZER_AVAIL_STORE_INTERVAL, "ping", 1);
     analyzer_avail_store_check(&cache->analyzer_avail_uptimes2,
-            ANALYZER_AVAIL_INTERVAL2, ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 1);
+            CONFIG_ANALYZER_AVAIL_INTERVAL2, CONFIG_ANALYZER_AVAIL_STORE_INTERVAL, "uptime", 1);
     analyzer_avail_store_check(&cache->analyzer_avail_pings2,
-            ANALYZER_AVAIL_INTERVAL2, ANALYZER_AVAIL_STORE_INTERVAL, "ping", 1);
+            CONFIG_ANALYZER_AVAIL_INTERVAL2, CONFIG_ANALYZER_AVAIL_STORE_INTERVAL, "ping", 1);
 
     zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/AVAIL] Flushed avail data");
 

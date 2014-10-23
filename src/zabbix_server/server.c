@@ -210,7 +210,15 @@ int CONFIG_TRENDS_SQL_WRITE = 1;
 int CONFIG_AUTOCREATE_LIMIT = 1;
 // 0 means no limit
 int CONFIG_TRAPPER_PRPCESSING_LIMIT = 0;
+
 char* CONFIG_ANALYZER_AVAIL_DIR = NULL;
+int CONFIG_ANALYZER_AVAIL_INTERVAL1 = SEC_PER_HOUR;
+int CONFIG_ANALYZER_AVAIL_INTERVAL2 = SEC_PER_DAY;
+int CONFIG_ANALYZER_AVAIL_STORE_INTERVAL = SEC_PER_MIN / 2;
+int CONFIG_ANALYZER_AVAIL_PING_FREQ = SEC_PER_MIN * 2;
+
+char* CONFIG_TARGET_TRENDS = NULL;
+char* CONFIG_TARGET_AVAIL = NULL;
 
 /* mutex for node syncs */
 ZBX_MUTEX	node_sync_access;
@@ -266,6 +274,11 @@ static void	zbx_set_defaults()
 
 	if (NULL == CONFIG_ANALYZER_AVAIL_DIR)
 		CONFIG_ANALYZER_AVAIL_DIR = zbx_strdup(CONFIG_ANALYZER_AVAIL_DIR, "/tmp");
+
+	if (NULL == CONFIG_TARGET_TRENDS)
+		CONFIG_TARGET_TRENDS = zbx_strdup(CONFIG_TARGET_TRENDS, "trends");
+	if (NULL == CONFIG_TARGET_AVAIL)
+		CONFIG_TARGET_AVAIL = zbx_strdup(CONFIG_TARGET_AVAIL, "trends");
 }
 
 /******************************************************************************
@@ -461,6 +474,21 @@ static void	zbx_load_config()
 			PARM_OPT,	0,			100000},
         {"AnalyzerAvailDir",		&CONFIG_ANALYZER_AVAIL_DIR,		TYPE_STRING,
 			PARM_OPT,	0,			0},
+
+        {"AnalyzerAvailInterval1",		&CONFIG_ANALYZER_AVAIL_INTERVAL1,		TYPE_INT,
+			PARM_OPT,	1,			SEC_PER_YEAR},
+        {"AnalyzerAvailInterval2",		&CONFIG_ANALYZER_AVAIL_INTERVAL2,		TYPE_INT,
+			PARM_OPT,	1,			SEC_PER_YEAR},
+        {"AnalyzerAvailStoreInterval",		&CONFIG_ANALYZER_AVAIL_STORE_INTERVAL,		TYPE_INT,
+			PARM_OPT,	1,			SEC_PER_DAY},
+        {"AnalyzerAvailPingFreq",		&CONFIG_ANALYZER_AVAIL_PING_FREQ,		TYPE_INT,
+			PARM_OPT,	1,			SEC_PER_DAY},
+
+        {"TargetTrends",		&CONFIG_TARGET_TRENDS,		TYPE_STRING,
+			PARM_OPT,	0,			0},
+        {"TargetAvail",		&CONFIG_TARGET_AVAIL,		TYPE_STRING,
+			PARM_OPT,	0,			0},
+
 		{NULL}
 	};
 
