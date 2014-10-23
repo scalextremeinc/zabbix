@@ -1,2 +1,35 @@
 Please see http://www.zabbix.com/ for detailed information about Zabbix.
 On-line Zabbix documentation is available at http://www.zabbix.com/documentation/2.0/manual/installation/install .
+
+Features added:
+- push metrics to zeromq queue (queue is expected to bind PULL socket - pipeline pattern)
+- time fix switch
+- housekeeper optimization
+- store history in zabbix sql only for items with triggers (used when data is sent to queue)
+- disable storing trends in zabbix sql (used when data is sent to queue)
+- added availability computation
+- performance optimizations
+
+Config options added:
+ZmqQueueAddress - zeromq pull socket address for metrics (possible to specify a list to distribute
+    metrics to multiple queues) eg: tcp://localhost:9901,tcp://localhost:5501
+ZmqErrQueueAddress - zeromq pull socket address for errors related to pushing to metrics queue
+    eg: tcp://127.0.0.1:8801
+ZmqQueueRecoveryDir - dir where zabbix can store recovery info about metrics pushed to queue,
+    useful when queue was down and metrics must be resend
+ZmqQueueDaoc - use sock opt ZMQ_DELAY_ATTACH_ON_CONNECT
+TimeFix - whether zabbix timefix is enabled or not
+HousekeeperSingleQuery - should housekeepr use single query
+HousekeeperSleep - how long house keeper should sleep between batches it processes
+TriggersHisotry - store history only for items used by triggers
+TrendsSqlWrite - whether to write trends to zabbix sql or not
+AutocreateLimit - limit for simultaneous autocreations of metrics
+TrapperProcessingLimit - limit of how many items trapper can process in single message
+AnalyzerAvailDir - directory where analyzer stores periodic availability snapshots
+AnalyzerAvailInterval1 - length in seconds of first interval computed by analyzer
+AnalyzerAvailInterval2 - length in seconds of second interval computed by analyzer
+AnalyzerAvailStoreInterval - interval for storing periodic snapshots of availability (seconds)
+AnalyzerAvailPingFreq - lenght in seconds of maximum gap between two datapoints, if gap is longer
+    analyzer starts considering particular metric as showing unavailability
+TargetTrends - tag marking trends sent to queue
+TargetAvail - tag marking availability sent to queue
