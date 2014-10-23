@@ -94,10 +94,6 @@ static int ZBX_ANALYZER_AVAIL_Q_SIZE = 0;
 static int ANALYZER_AVAIL_INTERVAL1 = 3600;
 static int ANALYZER_AVAIL_INTERVAL2 = 86400;
 
-// debug:
-// static int ANALYZER_AVAIL_INTERVAL1 = 300;
-// static int ANALYZER_AVAIL_INTERVAL2 = 900;
-
 static int ANALYZER_AVAIL_STORE_INTERVAL = 30;
 
 static int ANALYZER_AVAIL_PING_FREQ = 120;
@@ -1009,7 +1005,7 @@ static void analyzer_avail_process(ZBX_DC_HISTORY *history,
     int interval_start, prev_interval_end;
     zbx_uint64_t value;
     int isvalid = 0;
-    
+
     avail = (ZBX_DC_ANALYZER_AVAIL *) zbx_hashset_search(analyzer_avails, &history->itemid);
     
     if (NULL == avail) {
