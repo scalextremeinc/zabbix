@@ -1611,7 +1611,7 @@ static void trend_to_json(struct zbx_json *j, DB_ROW item, char *buf, size_t buf
     zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item[1], ZBX_JSON_TYPE_STRING);
     
     add_metric_suffix(item[0], suffix, buf);
-    zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, item[0], ZBX_JSON_TYPE_STRING);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, buf, ZBX_JSON_TYPE_STRING);
     
     zbx_snprintf(buf, buf_size, "%d", trend->clock);
     zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
