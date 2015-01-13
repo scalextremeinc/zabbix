@@ -1418,43 +1418,38 @@ static void analyzer_avail_load_all() {
 }
 
 #ifdef HAVE_QUEUE
-static void metric_to_avail(char* metric, char* name, int interval, char* buf) {
-    int len = 0;
-    if (strcmp("system.uptime", metric) == 0) {
-        memcpy(buf, metric, strlen(metric));
-        memcpy(buf + strlen(metric), ".availability", 13);
-        if (interval != SEC_PER_HOUR) {
-            len = zbx_snprintf(buf + strlen(metric) + 13, 32, "%d", interval);
-        }
-        buf[strlen(metric) + 13 + len] = '[';
-        memcpy(buf + strlen(metric) + 14 + len, name, strlen(name));
-        buf[strlen(metric) + 14 + len + strlen(name)] = ']';
-        buf[strlen(metric) + 14 + len + strlen(name) + 1] = '\0';
-        return;
-    }
-    
+static void add_metric_suffix(char* metric, char* suffix, char* buf) {
     int n;
     char* p = strchr(metric, '[');
     if (p != NULL) {
         n = (int) (p - metric);
         memcpy(buf, metric, n);
-        memcpy(buf + n, ".avail", 6);
-        if (interval != SEC_PER_HOUR) {
-            len = zbx_snprintf(buf + n + 6, 32, "%d", interval);
-        }
-        buf[n + 6 + len] = '.';
-        memcpy(buf + n + 7 + len, name, strlen(name));
-        memcpy(buf + n + 7 + len + strlen(name), p, strlen(metric) - n);
+        memcpy(buf + n, suffix, strlen(suffix));
+        memcpy(buf + n + strlen(suffix), p, strlen(metric) - n);
     } else {
         memcpy(buf, metric, strlen(metric));
-        memcpy(buf + strlen(metric), ".avail", 6);
-        if (interval != SEC_PER_HOUR) {
-            len = zbx_snprintf(buf + strlen(metric) + 6, 32, "%d", interval);
-        }
-        buf[strlen(metric) + 6 + len] = '.';
-        memcpy(buf + strlen(metric) + 7 + len, name, strlen(name));
+        memcpy(buf + strlen(metric), suffix, strlen(suffix));
     }
-    buf[strlen(metric) + 7 + len + strlen(name)] = '\0';
+    buf[strlen(metric) + strlen(suffix)] = '\0';
+}
+
+static void add_avail_suffix(char* metric, char* name, int interval, char* buf) {
+    const size_t SUFFIX_SIZE = 128;
+    char suffix[SUFFIX_SIZE];
+
+    if (strcmp("system.uptime", metric) == 0) {
+        if (interval == SEC_PER_HOUR)
+            zbx_snprintf(suffix, SUFFIX_SIZE, ".availability[%s]", name);
+        else
+            zbx_snprintf(suffix, SUFFIX_SIZE, ".availability%d[%s]", interval, name);
+    } else {
+        if (interval == SEC_PER_HOUR)
+            zbx_snprintf(suffix, SUFFIX_SIZE, ".avail.%s", name);
+        else
+            zbx_snprintf(suffix, SUFFIX_SIZE, ".avail%d.%s", interval, name);
+    }
+
+    add_metric_suffix(metric, suffix, buf);
 }
 
 static void analyzer_avail_to_json(struct zbx_json *j,
@@ -1499,8 +1494,8 @@ static void analyzer_avail_to_json(struct zbx_json *j,
         zbx_snprintf(buf, BUF_SIZE, "%f", avail->value);
         zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
         
-        metric_to_avail(item_row[1], "second", avail->interval, buf);
-        zabbix_log(LOG_LEVEL_ERR, "avail item: %s", buf);
+        add_avail_suffix(item_row[1], "second", avail->interval, buf);
+        // zabbix_log(LOG_LEVEL_ERR, "avail item: %s", buf);
         zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, buf, ZBX_JSON_TYPE_STRING);
         zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item_row[0], ZBX_JSON_TYPE_STRING);
         
@@ -1515,8 +1510,8 @@ static void analyzer_avail_to_json(struct zbx_json *j,
         zbx_snprintf(buf, BUF_SIZE, "%f", percent);
         zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
         
-        metric_to_avail(item_row[1], "percent", avail->interval, buf);
-        zabbix_log(LOG_LEVEL_ERR, "avail item: %s", buf);
+        add_avail_suffix(item_row[1], "percent", avail->interval, buf);
+        // zabbix_log(LOG_LEVEL_ERR, "avail item: %s", buf);
         zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, buf, ZBX_JSON_TYPE_STRING);
         zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item_row[0], ZBX_JSON_TYPE_STRING);
         
@@ -1594,15 +1589,45 @@ void DCmass_flush_analyzer() {
 }
 
 #ifdef HAVE_QUEUE
+
+static void trend_to_json(struct zbx_json *j, DB_ROW item, char *buf, size_t buf_size,
+        char *suffix, ZBX_DC_TREND *trend, history_value_t value) {
+
+    switch (trend->value_type) {
+        case ITEM_VALUE_TYPE_FLOAT:
+            zbx_snprintf(buf, buf_size, "%f", value.dbl);
+            break;
+        case ITEM_VALUE_TYPE_UINT64:
+            zbx_snprintf(buf, buf_size, ZBX_FS_UI64, value.ui64);
+            break;
+        default:
+            zabbix_log(LOG_LEVEL_ERR, "Unknown trend value type: %d", trend->value_type);
+            return;
+    }
+
+    zbx_json_addobject(j, NULL);
+    
+    zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item[1], ZBX_JSON_TYPE_STRING);
+    
+    add_metric_suffix(item[0], suffix, buf);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, item[0], ZBX_JSON_TYPE_STRING);
+    
+    zbx_snprintf(buf, buf_size, "%d", trend->clock);
+    zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
+    
+    zbx_json_close(j);
+}
+
 static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_num) {
-    const size_t BUF_SIZE = 32;
-    char buf[BUF_SIZE];
+    size_t buf_size = 0;
+    char *buf = NULL;
     ZBX_DC_TREND *trend = NULL;
     size_t sql_offset = 0;
     DB_RESULT result;
 	DB_ROW item_row;
     int i;
-     
+
     zbx_json_init(j, ZBX_JSON_STAT_BUF_LEN);
     
     // this is information for worker where to store this data
@@ -1613,50 +1638,36 @@ static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_
 	for (i = 0; i < trends_num; i++) {
 		trend = &trends[i];
 
-        switch (trend->value_type) {
-            case ITEM_VALUE_TYPE_FLOAT:
-                zbx_snprintf(buf, BUF_SIZE, "%f", trend->value_avg.dbl);
-                break;
-            case ITEM_VALUE_TYPE_UINT64:
-                zbx_snprintf(buf, BUF_SIZE, ZBX_FS_UI64, trend->value_avg.ui64);
-                break;
-            default:
-                zabbix_log(LOG_LEVEL_ERR, "Unknown trend value type: %d", trend->value_type);
-                continue;
-        }
-        
         sql_offset = 0;
         zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
             "SELECT i.key_,h.host "
             "FROM items as i LEFT JOIN (hosts as h) ON (i.hostid=h.hostid) "
             "WHERE i.itemid=%d LIMIT 1", trend->itemid);
-        
         result = DBselect("%s", sql);
 
         item_row = DBfetch(result);
         if (item_row == NULL) {
             zabbix_log(LOG_LEVEL_ERR, "Unable to get item by id: %d", trend->itemid);
-
             DBfree_result(result);
             continue;
         }
+
+        if (buf_size < strlen(item_row[0]) + 20) {
+            buf_size = strlen(item_row[0]) + 128;
+            buf = zbx_realloc(buf, buf_size);
+        }
         
-        zbx_json_addobject(j, NULL);
-        
-        zbx_json_addstring(j, ZBX_PROTO_TAG_VALUE, buf, ZBX_JSON_TYPE_STRING);
-        
-        
-        zbx_json_addstring(j, ZBX_PROTO_TAG_KEY, item_row[0], ZBX_JSON_TYPE_STRING);
-        zbx_json_addstring(j, ZBX_PROTO_TAG_HOST, item_row[1], ZBX_JSON_TYPE_STRING);
-        
+        // TODO: remove this and use avg trend suffixed with .trend_avg1h
+        trend_to_json(j, item_row, buf, buf_size, "", trend, trend->value_avg);
+
+        trend_to_json(j, item_row, buf, buf_size, ".trend_avg1h", trend, trend->value_avg);
+        trend_to_json(j, item_row, buf, buf_size, ".trend_min1h", trend, trend->value_min);
+        trend_to_json(j, item_row, buf, buf_size, ".trend_max1h", trend, trend->value_max);
+
         DBfree_result(result);
-        
-        zbx_snprintf(buf, BUF_SIZE, "%d", trend->clock);
-        zbx_json_addstring(j, ZBX_PROTO_TAG_CLOCK, buf, ZBX_JSON_TYPE_INT);
-        
-        zbx_json_close(j);
     }
-    
+
+    zbx_free(buf);
 }
 #endif
 
