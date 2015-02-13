@@ -1900,6 +1900,16 @@ static void	aggregate_get_items(zbx_uint64_t **ids, int *ids_alloc, int *ids_num
 }
 
 
+static int aggregate_is_nodata(char *itemkey) {
+
+    zabbix_log(LOG_LEVEL_INFORMATION, "aggregate_is_nodata %s", itemkey);
+
+    if (NULL != strstr(itemkey, "agent.ping")) {
+        return SUCCEED;
+    }
+    return FAIL;
+}
+
 static int	evaluate_GRPANY(char *value, DB_ITEM *item, const char *function, const char *parameters, time_t now)
 {
 	const char	*__function_name = "evaluate_GRPANY";
@@ -1992,8 +2002,14 @@ static int	evaluate_GRPANY(char *value, DB_ITEM *item, const char *function, con
 
         if (FAIL == sub_res)
         {
-            zabbix_log(LOG_LEVEL_INFORMATION, "In %s() grpany - eval sub values fail", __function_name);
-            continue;
+            if (SUCCEED == aggregate_is_nodata(item->key)) {
+                tmp_value[0] = '0';
+                tmp_value[1] = NULL;
+                zabbix_log(LOG_LEVEL_INFORMATION, "In %s() %s - this is nodata - setting FAIL to %s", __function_name, item->key, tmp_value);
+            } else {
+                zabbix_log(LOG_LEVEL_INFORMATION, "In %s() %s - eval sub values fail", __function_name, item->key);
+                continue;
+            }
         }
 
         offset += zbx_snprintf(value + offset, MAX_BUFFER_LEN - offset, "|%s", tmp_value);
