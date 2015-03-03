@@ -1657,9 +1657,6 @@ static void trends_to_json(struct zbx_json *j, ZBX_DC_TREND *trends, int trends_
             buf = zbx_realloc(buf, buf_size);
         }
         
-        // TODO: remove this and use avg trend suffixed with .trendavg1h
-        trend_to_json(j, item_row, buf, buf_size, "", trend, trend->value_avg);
-
         trend_to_json(j, item_row, buf, buf_size, ".trendavg1h", trend, trend->value_avg);
         trend_to_json(j, item_row, buf, buf_size, ".trendmin1h", trend, trend->value_min);
         trend_to_json(j, item_row, buf, buf_size, ".trendmax1h", trend, trend->value_max);
