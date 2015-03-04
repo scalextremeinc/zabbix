@@ -217,6 +217,7 @@ int CONFIG_ANALYZER_AVAIL_INTERVAL2 = SEC_PER_DAY;
 int CONFIG_ANALYZER_AVAIL_STORE_INTERVAL = SEC_PER_MIN / 2;
 int CONFIG_ANALYZER_AVAIL_PING_FREQ = SEC_PER_MIN * 2;
 
+char* CONFIG_TARGET = NULL;
 char* CONFIG_TARGET_TRENDS = NULL;
 char* CONFIG_TARGET_AVAIL = NULL;
 
@@ -275,6 +276,8 @@ static void	zbx_set_defaults()
 	if (NULL == CONFIG_ANALYZER_AVAIL_DIR)
 		CONFIG_ANALYZER_AVAIL_DIR = zbx_strdup(CONFIG_ANALYZER_AVAIL_DIR, "/tmp");
 
+	if (NULL == CONFIG_TARGET)
+		CONFIG_TARGET = zbx_strdup(CONFIG_TARGET, "tsdb");
 	if (NULL == CONFIG_TARGET_TRENDS)
 		CONFIG_TARGET_TRENDS = zbx_strdup(CONFIG_TARGET_TRENDS, "trends");
 	if (NULL == CONFIG_TARGET_AVAIL)
@@ -483,7 +486,9 @@ static void	zbx_load_config()
 			PARM_OPT,	1,			SEC_PER_DAY},
         {"AnalyzerAvailPingFreq",		&CONFIG_ANALYZER_AVAIL_PING_FREQ,		TYPE_INT,
 			PARM_OPT,	1,			SEC_PER_DAY},
-
+        
+        {"Target",		&CONFIG_TARGET,		TYPE_STRING,
+			PARM_OPT,	0,			0},
         {"TargetTrends",		&CONFIG_TARGET_TRENDS,		TYPE_STRING,
 			PARM_OPT,	0,			0},
         {"TargetAvail",		&CONFIG_TARGET_AVAIL,		TYPE_STRING,

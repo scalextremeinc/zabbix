@@ -44,7 +44,7 @@
 #ifdef HAVE_QUEUE
 #include "queue.h"
 #include <zmq.h>
-
+extern char* CONFIG_TARGET;
 extern char* CONFIG_ZMQ_QUEUE_ADDRESS;
 extern char* CONFIG_ZMQ_ERRQUEUE_ADDRESS;
 extern char* CONFIG_ZMQ_QUEUE_RECOVERY_DIR;
@@ -319,7 +319,7 @@ static int	process_trap(zbx_sock_t	*sock, char *s, int max_len)
 				{
                     recv_agenthistory(sock, &jp, &timediff);
 #ifdef HAVE_QUEUE
-                    queue_msg(qctx, &jp, &timediff);
+                    queue_msg(qctx, &jp, &timediff, CONFIG_TARGET);
 #endif
 				}
 				else if (0 == strcmp(value, ZBX_PROTO_VALUE_HISTORY_DATA))

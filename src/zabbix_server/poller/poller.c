@@ -47,6 +47,7 @@
 #include "queue.h"
 #include "zbxjson.h"
 #include <zmq.h>
+extern char* CONFIG_TARGET;
 extern char* CONFIG_ZMQ_QUEUE_ADDRESS;
 extern char* CONFIG_ZMQ_ERRQUEUE_ADDRESS;
 extern char* CONFIG_ZMQ_QUEUE_RECOVERY_DIR;
@@ -799,7 +800,7 @@ static int	get_values(unsigned char poller_type)
 #ifdef HAVE_QUEUE
             item_to_json(&j, &items[i], &results[i], &timespecs[i]);
             zbx_json_open(j.buffer, &jp);
-            queue_msg(qctx, &jp, NULL);
+            queue_msg(qctx, &jp, NULL, CONFIG_TARGET);
 #endif                
 			dc_add_history(items[i].itemid, items[i].value_type, items[i].flags, &results[i], &timespecs[i],
 					ITEM_STATUS_ACTIVE, NULL, 0, NULL, 0, 0, 0, 0);

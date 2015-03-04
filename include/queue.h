@@ -27,9 +27,10 @@ void queue_sock_connect_msg(struct queue_ctx* ctx, const char* queue_addr_msg);
 
 void queue_sock_connect_err(struct queue_ctx* ctx, const char* queue_addr_err);
 
-void queue_msg(struct queue_ctx* ctx, struct zbx_json_parse *jp_msg, zbx_timespec_t *timediff);
+void queue_msg(struct queue_ctx* ctx, struct zbx_json_parse *jp_msg,
+        zbx_timespec_t *timediff, char* target);
 
-int queue_msg_send(void* zmq_sock, const char* msg);
+int queue_msg_send(void* zmq_sock, const char* msg, char* target);
 
 void queue_msg_send_error(struct queue_ctx* ctx, const char* msg);
 

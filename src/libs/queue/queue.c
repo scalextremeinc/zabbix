@@ -177,7 +177,9 @@ int __fix_time(struct zbx_json_parse *jp_msg, struct zbx_json *jp_msg_fixed,
     return ret;
 }
 
-void queue_msg(struct queue_ctx* ctx, struct zbx_json_parse *jp_msg, zbx_timespec_t *timediff) {
+void queue_msg(struct queue_ctx* ctx, struct zbx_json_parse *jp_msg,
+        zbx_timespec_t *timediff, char* target) {
+
     struct zbx_json jp_msg_fixed;
     char *msg = jp_msg->start;
 
@@ -194,7 +196,7 @@ void queue_msg(struct queue_ctx* ctx, struct zbx_json_parse *jp_msg, zbx_timespe
             msg = jp_msg_fixed.buffer;
     }
     
-    if (queue_msg_send(ctx->zmq_sock_msg, msg) == -1) {
+    if (queue_msg_send(ctx->zmq_sock_msg, msg, target) == -1) {
         queue_msg_send_error(ctx, msg);
         ctx->prev_status = -1;
     } else {
@@ -206,10 +208,26 @@ void queue_msg(struct queue_ctx* ctx, struct zbx_json_parse *jp_msg, zbx_timespe
     }
 }
 
-int queue_msg_send(void* zmq_sock, const char* msg) {
-    size_t len = strlen(msg);
-    // send json data to queue
+int queue_msg_send(void* zmq_sock, const char* msg, char* target) {
+    size_t len;
     zmq_msg_t request;
+
+    if (target != NULL) {
+        len = strlen(target);
+        if (zmq_msg_init_size(&request, len) == -1) {
+            zabbix_log(LOG_LEVEL_ERR, "Error allocating zmq message: %s", strerror(errno));
+            return -1;
+        }
+        memcpy(zmq_msg_data(&request), target, len);
+        if (zmq_msg_send(&request, zmq_sock, ZMQ_SNDMORE) == -1) {
+            zabbix_log(LOG_LEVEL_ERR, "Error sending to queue: %s", strerror(errno));
+            zmq_msg_close(&request);
+            return -1;
+        }
+        zmq_msg_close(&request);
+    }
+    
+    len = strlen(msg);
     if (zmq_msg_init_size(&request, len) == -1) {
         zabbix_log(LOG_LEVEL_ERR, "Error allocating zmq message: %s", strerror(errno));
         return -1;
@@ -224,6 +242,7 @@ int queue_msg_send(void* zmq_sock, const char* msg) {
         return -1;
     }
     zmq_msg_close(&request);
+
     return 0;
 }
 
@@ -394,7 +413,7 @@ void queue_msg_send_error(struct queue_ctx* ctx, const char* msg) {
     
     if (ctx->zmq_sock_err != NULL) {
         __build_error_msg(ctx, &j);
-        if (queue_msg_send(ctx->zmq_sock_err, j.buffer) == -1) {
+        if (queue_msg_send(ctx->zmq_sock_err, j.buffer, NULL) == -1) {
             zabbix_log(LOG_LEVEL_ERR, "Error sending to error queue: %s", strerror(errno));
         }
         zbx_json_free(&j);

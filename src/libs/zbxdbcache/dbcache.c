@@ -1569,7 +1569,7 @@ void DCmass_flush_analyzer() {
         sec2 = zbx_time();
         analyzer_avail_to_json(&j, analyzer_metrics, analyzer_metrics_num);
         zbx_json_open(j.buffer, &jp);
-        queue_msg(qctx, &jp, NULL);
+        queue_msg(qctx, &jp, NULL, CONFIG_TARGET_AVAIL);
         zbx_json_free(&j);
         sec2 = zbx_time() - sec2;
         zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: queue send: " 
@@ -1703,7 +1703,7 @@ void DCmass_flush_trends() {
         sec2 = zbx_time();
         trends_to_json(&j, trends, trends_num);
         zbx_json_open(j.buffer, &jp);
-        queue_msg(qctx, &jp, NULL);
+        queue_msg(qctx, &jp, NULL, CONFIG_TARGET_TRENDS);
         zbx_json_free(&j);
         sec2 = zbx_time() - sec2;
         zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: queue send: " 
