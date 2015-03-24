@@ -1902,7 +1902,7 @@ static void	aggregate_get_items(zbx_uint64_t **ids, int *ids_alloc, int *ids_num
 
 static int aggregate_is_nodata(char *itemkey) {
 
-    zabbix_log(LOG_LEVEL_INFORMATION, "aggregate_is_nodata %s", itemkey);
+    zabbix_log(LOG_LEVEL_DEBUG, "aggregate_is_nodata %s", itemkey);
 
     if (NULL != strstr(itemkey, "agent.ping")) {
         return SUCCEED;
@@ -1929,7 +1929,7 @@ static int	evaluate_GRPANY(char *value, DB_ITEM *item, const char *function, con
     char tmp_value[MAX_BUFFER_LEN];
 	DB_ITEM		tmp_item;
 
-    zabbix_log(LOG_LEVEL_INFORMATION, "In %s() grpany key:'%s'", __function_name, item->key);
+    zabbix_log(LOG_LEVEL_DEBUG, "In %s() grpany key:'%s'", __function_name, item->key);
 
 
     if (2 != parse_command(item->key, key, sizeof(key), params, sizeof(params)))
@@ -2005,9 +2005,9 @@ static int	evaluate_GRPANY(char *value, DB_ITEM *item, const char *function, con
             if (SUCCEED == aggregate_is_nodata(item->key)) {
                 tmp_value[0] = '0';
                 tmp_value[1] = NULL;
-                zabbix_log(LOG_LEVEL_INFORMATION, "In %s() %s - this is nodata - setting FAIL to %s", __function_name, item->key, tmp_value);
+                zabbix_log(LOG_LEVEL_DEBUG, "In %s() %s - this is nodata - setting FAIL to %s", __function_name, item->key, tmp_value);
             } else {
-                zabbix_log(LOG_LEVEL_INFORMATION, "In %s() %s - eval sub values fail", __function_name, item->key);
+                zabbix_log(LOG_LEVEL_DEBUG, "In %s() %s - eval sub values fail", __function_name, item->key);
                 continue;
             }
         }
@@ -2019,7 +2019,7 @@ static int	evaluate_GRPANY(char *value, DB_ITEM *item, const char *function, con
 
 
     DBfree_result(result);
-    zabbix_log(LOG_LEVEL_INFORMATION, "In %s() grpany done - value:%s", __function_name, value);
+    zabbix_log(LOG_LEVEL_DEBUG, "In %s() grpany done - value:%s", __function_name, value);
     res = SUCCEED;
 
 clean:

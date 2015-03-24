@@ -3041,7 +3041,7 @@ static void	zbx_substitute_functions_results(zbx_vector_ptr_t *ifuncs, zbx_vecto
             //if there was a grpany found, we log it
             if (has_grpany)
             {
-                zabbix_log(LOG_LEVEL_INFORMATION, "%s() grpany expression result '%s'", __function_name, out);
+                zabbix_log(LOG_LEVEL_DEBUG, "%s() grpany expression result '%s'", __function_name, out);
             }
 
 			zabbix_log(LOG_LEVEL_DEBUG, "%s() expression[%d]:'%s' => '%s'",
