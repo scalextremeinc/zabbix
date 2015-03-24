@@ -172,7 +172,7 @@ static int	evaluate_aggregate(AGENT_RESULT *res, const char *grpfunc, const char
 
     int     grpany_offset = 0;
 
-	zabbix_log(LOG_LEVEL_INFORMATION, "In %s() grpfunc:'%s' groups:'%s' itemkey:'%s' function:'%s(%s)'",
+	zabbix_log(LOG_LEVEL_DEBUG, "In %s() grpfunc:'%s' groups:'%s' itemkey:'%s' function:'%s(%s)'",
 			__function_name, grpfunc, groups, itemkey, itemfunc, param);
 
 	if (0 == strcmp(grpfunc, "grpmin"))

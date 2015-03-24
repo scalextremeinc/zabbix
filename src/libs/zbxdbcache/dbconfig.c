@@ -741,7 +741,7 @@ static void DCsync_autocreate(DB_RESULT result) {
     zbx_hashset_iter_reset(&config->auto_create, &iter);
 
     while (NULL != (autocreate_row = zbx_hashset_iter_next(&iter))) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Sync autocreate releasing: prefix:%s app:%s", autocreate_row->prefix, autocreate_row->app);
+        zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] Sync autocreate releasing: prefix:%s app:%s", autocreate_row->prefix, autocreate_row->app);
 		zbx_strpool_release(autocreate_row->app);
 		zbx_strpool_release(autocreate_row->prefix);
     }
@@ -758,12 +758,12 @@ static void DCsync_autocreate(DB_RESULT result) {
 
         autocreate_local.delta = atoi(row[2]);
 
-        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Sync autocreate: prefix:%s app:%s delta:%d",
+        zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] Sync autocreate: prefix:%s app:%s delta:%d",
             autocreate_local.prefix, autocreate_local.app, autocreate_local.delta);
 
         zbx_hashset_insert(&config->auto_create, &autocreate_local, sizeof(ZBX_DC_AUTOCREATE));
     }
-    zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Sync autocreate: num_data %d", config->auto_create.num_data);
+    zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] Sync autocreate: num_data %d", config->auto_create.num_data);
 }
 
 static void DCsync_avail(DB_RESULT result) {
@@ -791,14 +791,14 @@ static void DCsync_avail(DB_RESULT result) {
                     tmp = row[2][i];
                     row[2][i] = '\0';
                     avail_local_params[avail_local.params_len] = atoi(row[2] + j);
-                    // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] found param: %d",
+                    // zabbix_log(LOG_LEVEL_DEBUG, "[avail_conf] found param: %d",
                     //     avail_local_params[avail_local.params_len]);
                     row[2][i] = tmp;
                     j = i + 1;
                     avail_local.params_len++;
                 }
                 if (avail_local.params_len == ZBX_DC_AVAIL_CONF_MAX_PARAMS) {
-                    zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] max params limit reached, "
+                    zabbix_log(LOG_LEVEL_DEBUG, "[avail_conf] max params limit reached, "
                         "limit: %d, itemid: %d", ZBX_DC_AVAIL_CONF_MAX_PARAMS, avail_local.itemid);
                     break;
                 }
@@ -810,7 +810,7 @@ static void DCsync_avail(DB_RESULT result) {
         if (avail_local.params_len > 0)
             memcpy(avail->params, avail_local_params, sizeof(int) * avail_local.params_len);
 
-        // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] Sync avail: itemid: %d", avail_local.itemid);
+        // zabbix_log(LOG_LEVEL_DEBUG, "[avail_conf] Sync avail: itemid: %d", avail_local.itemid);
 
         zbx_hashset_insert(&config->avail_conf, avail,
                 sizeof(ZBX_DC_AVAIL_CONF) + sizeof(int) * avail_local.params_len);
@@ -818,7 +818,7 @@ static void DCsync_avail(DB_RESULT result) {
         // free allocated memory as hashset insert copies data, which is stored in shared mem
         free(avail);
     }
-    zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] Sync avail: num_data %d", config->avail_conf.num_data);
+    zabbix_log(LOG_LEVEL_DEBUG, "[avail_conf] Sync avail: num_data %d", config->avail_conf.num_data);
 }
 
 static void DCsync_historyitems()
@@ -836,7 +836,7 @@ static void DCsync_historyitems()
     {
         if ( (now - item->time) > 600 )
         {
-            zabbix_log(LOG_LEVEL_INFORMATION, "grpany DCsync_historyitems remove item %d", item->itemid);
+            zabbix_log(LOG_LEVEL_DEBUG, "grpany DCsync_historyitems remove item %d", item->itemid);
             zbx_hashset_iter_remove(&iter);
         }
     }
@@ -3495,7 +3495,7 @@ int	DCconfig_get_item_by_key(DC_ITEM *item,
 		goto unlock;
 
     if (skip_calculated_item && dc_item->type == ITEM_TYPE_CALCULATED) { 
-        zabbix_log(LOG_LEVEL_INFORMATION, "DCconfig_get_item_by_key skip - calculated item %s, %s", host, key);
+        zabbix_log(LOG_LEVEL_DEBUG, "DCconfig_get_item_by_key skip - calculated item %s, %s", host, key);
         goto unlock;
     }
 
@@ -4845,11 +4845,11 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     ZBX_DC_AUTOCREATE *autocreate;
     int delta;
 
-    zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Checking for autocreate, item: %s", key);
+    zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] Checking for autocreate, item: %s", key);
     
 
     if (-1 == zbx_sem_decr_nowait(&autocreate_sem)) {
-        zabbix_log(LOG_LEVEL_INFORMATION,
+        zabbix_log(LOG_LEVEL_DEBUG,
             "[AUTOCREATE] Skipping item creation, autocreate limit reached");
         goto exit;
     }
@@ -4883,7 +4883,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     UNLOCK_CACHE;
 
     if (NULL == host) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, host not found: %s", host_name);
+        zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] Skipping item creation, host not found: %s", host_name);
         goto exit_sem;
     }
 
@@ -4892,7 +4892,7 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     row = DBfetch(result);
     DBfree_result(result);
     if (NULL != row) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item exists, waiting for cache sync, key: %s", key);
+        zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] Item exists, waiting for cache sync, key: %s", key);
         goto exit_sem;
     }
 
@@ -4902,13 +4902,13 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     
     if (NULL == row) {
         DBfree_result(result);
-        zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Skipping item creation, application not found: %s host:%s hostid:%d", app_name, host_name, host->hostid);
+        zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] Skipping item creation, application not found: %s host:%s hostid:%d", app_name, host_name, host->hostid);
         goto exit_sem;
     }
     
     ZBX_STR2UINT64(applicationid, row[0]);
     DBfree_result(result);
-    //zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Application found: %s", app_name);
+    //zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] Application found: %s", app_name);
 
     if (ZBX_DB_OK != zbx_db_begin()) {
         zabbix_log(LOG_LEVEL_ERR, "[AUTOCREATE] Failed beginning transaction");
@@ -4973,14 +4973,14 @@ int DCcreate_item(char *key, zbx_uint64_t proxy_hostid, const char *host_name) {
     }
     
     ret = 0;
-    zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Item created: %s, app: %s", key, app_name);
+    zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] Item created: %s, app: %s", key, app_name);
 
 exit_sem:
     zbx_sem_incr(&autocreate_sem);
 exit:
     zbx_free(sql);
     zbx_free(app_name);
-    //zabbix_log(LOG_LEVEL_INFORMATION, "[AUTOCREATE] Return status: %d", ret);
+    //zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] Return status: %d", ret);
     return ret;
 }
 
@@ -5014,7 +5014,7 @@ void DCrefresh_items_cache() {
 
 void DCadd_historyitems(zbx_uint64_t itemid)
 {
-    zabbix_log(LOG_LEVEL_INFORMATION, "DCadd_historyitems grpany %d", itemid);
+    zabbix_log(LOG_LEVEL_DEBUG, "DCadd_historyitems grpany %d", itemid);
     int                 found;
     ZBX_DC_HISTORY_ITEM *item;
     time_t              now;
@@ -5096,7 +5096,7 @@ int DCverify_avail_ping_value(zbx_uint64_t itemid, int value) {
         // check if value matches any of configured available values
         for (i = 0; i < avail_conf->params_len; i++) {
             if (value == avail_conf->params[i]) {
-                // zabbix_log(LOG_LEVEL_INFORMATION, "[avail_conf] DCverify_avail_ping_value itemid: %d, value: %d, param: %d", itemid, value, avail_conf->params[i]);
+                // zabbix_log(LOG_LEVEL_DEBUG, "[avail_conf] DCverify_avail_ping_value itemid: %d, value: %d, param: %d", itemid, value, avail_conf->params[i]);
                 result = 1;
                 break;
             }

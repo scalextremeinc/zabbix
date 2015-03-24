@@ -742,7 +742,7 @@ static void	DCadd_trend(ZBX_DC_HISTORY *history, ZBX_DC_TREND **trends, int *tre
         char *process_type_str = get_process_type_string(process_type);
         LOCK_TRENDS_DB;
         unlock = 1;
-        zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: DCadd_trend: trends_num: %d, size: %d/%d",
+        zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: DCadd_trend: trends_num: %d, size: %d/%d",
             process_type_str, process_num, *trends_num,
             (*trends_num) * sizeof(ZBX_DC_TREND), ZBX_TRENDS_DB_SIZE * sizeof(ZBX_DC_TREND));
         // if trends db cache is full, wait for free space
@@ -964,7 +964,7 @@ static void analyzer_avail_increase_uptime(ZBX_DC_ANALYZER_AVAIL *avail, ZBX_DC_
         int avail_start = history->clock - value;
         if (avail_start > interval_start) {
             avail->slot[avail->curr].progress = avail_start;
-            zabbix_log(LOG_LEVEL_INFORMATION,
+            zabbix_log(LOG_LEVEL_DEBUG,
                 "[ANALYZER/uptime%d] first avail after current interval, "
                 "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, avail: "
                 ZBX_FS_UI64 ", clock: %d", interval,
@@ -975,7 +975,7 @@ static void analyzer_avail_increase_uptime(ZBX_DC_ANALYZER_AVAIL *avail, ZBX_DC_
     
     if (value < avail->value_last) {
         // machine was down
-        zabbix_log(LOG_LEVEL_INFORMATION,
+        zabbix_log(LOG_LEVEL_DEBUG,
             "[ANALYZER/uptime%d] machine down discovered, "
             "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, avail: "
             ZBX_FS_UI64 ", clock: %d", interval,
@@ -1016,20 +1016,20 @@ static void analyzer_avail_process(ZBX_DC_HISTORY *history,
 
         avail = analyzer_avail_create_avail(history, analyzer_avails);
         if (NULL == avail) {
-            zabbix_log(LOG_LEVEL_INFORMATION, 
+            zabbix_log(LOG_LEVEL_DEBUG, 
                 "[ANALYZER/%s%d] failed crateing new avail avail, itemid: " ZBX_FS_UI64,
                 actions->name, interval, history->itemid);
             return;
         }
 
-        zabbix_log(LOG_LEVEL_INFORMATION, 
+        zabbix_log(LOG_LEVEL_DEBUG, 
             "[ANALYZER/%s%d] item added, itemid: " ZBX_FS_UI64,
             actions->name, interval, history->itemid);
     }
 
     if (history->clock < avail->clock_last) {
         // out of order data point
-        zabbix_log(LOG_LEVEL_INFORMATION,
+        zabbix_log(LOG_LEVEL_DEBUG,
             "[ANALYZER/%s%d] out of order data point, "
             "itemid: " ZBX_FS_UI64 ", avail clock: %d, progress: %d, avail: %f, data point clock: %d",
             actions->name, interval, avail->itemid, avail->slot[avail->curr].clock,
@@ -1041,7 +1041,7 @@ static void analyzer_avail_process(ZBX_DC_HISTORY *history,
     prev_interval_end = interval_start - 1;
     
     if (analyzer_avail_get_item_value(history, &value) < 0) {
-        zabbix_log(LOG_LEVEL_INFORMATION, "[ANALYZER/%s%d] Invalid avail item value type: %d",
+        zabbix_log(LOG_LEVEL_DEBUG, "[ANALYZER/%s%d] Invalid avail item value type: %d",
                actions->name, interval, history->value_type);
         return;
     }
@@ -1049,7 +1049,7 @@ static void analyzer_avail_process(ZBX_DC_HISTORY *history,
     // new hour
     if (interval_start > avail->slot[avail->curr].clock) {
         if (analyzer_avail_send_unfinished(avail, prev_interval_end, interval) == 0) {
-            zabbix_log(LOG_LEVEL_INFORMATION, 
+            zabbix_log(LOG_LEVEL_DEBUG, 
                 "[ANALYZER/%s%d] unfinished analyze, "
                 "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f",
                 actions->name, interval, avail->itemid, avail->slot[avail->prev].clock,
@@ -1058,7 +1058,7 @@ static void analyzer_avail_process(ZBX_DC_HISTORY *history,
 
         analyzer_avail_slot_swap(avail, interval_start);
         
-        zabbix_log(LOG_LEVEL_INFORMATION,
+        zabbix_log(LOG_LEVEL_DEBUG,
             "[ANALYZER/%s%d] new interval begins, " "itemid: " ZBX_FS_UI64
             ", clock: %d, progress: %d, avail: %f, avail: " ZBX_FS_UI64 ", clock: %d",
             actions->name, interval, avail->itemid, avail->slot[avail->curr].clock,
@@ -1076,7 +1076,7 @@ static void analyzer_avail_process(ZBX_DC_HISTORY *history,
         
         actions->finish_prev(history, avail, prev_interval_end, value, isvalid);
 
-        zabbix_log(LOG_LEVEL_INFORMATION,
+        zabbix_log(LOG_LEVEL_DEBUG,
             "[ANALYZER/%s%d] finished prev interval, "
             "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f, avail: "
             ZBX_FS_UI64 ", clock: %d", actions->name, interval, avail->itemid,
@@ -1120,7 +1120,7 @@ static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, cha
         }
 
         if (scanf_count == SCANF_EXPECTED) {
-            zabbix_log(LOG_LEVEL_INFORMATION,
+            zabbix_log(LOG_LEVEL_DEBUG,
                     "[ANALYZER/AVAIL%d] loaded: " ZBX_FS_UI64 ":" ZBX_FS_UI64
                     ":%d:%d:%d:%lf:%d:%d:%lf:%d:%d",
                     interval, avail.itemid, avail.value_last,
@@ -1130,7 +1130,7 @@ static void analyzer_avail_load(zbx_hashset_t *analyzer_avail, int interval, cha
 
             insert_result = zbx_hashset_insert(analyzer_avail, &avail, sizeof(ZBX_DC_ANALYZER_AVAIL));
             if (NULL == insert_result) {
-                zabbix_log(LOG_LEVEL_INFORMATION,
+                zabbix_log(LOG_LEVEL_DEBUG,
                         "[ANALYZER/AVAIL%d] failed crateing new avail", interval);
                 return;
             }
@@ -1269,14 +1269,14 @@ static void analyzer_avail_check(zbx_hashset_t *analyzer_avail, int interval) {
     
 	while (NULL != (avail = (ZBX_DC_ANALYZER_AVAIL *)zbx_hashset_iter_next(&iter))) {
         if (avail->slot[avail->prev].progress == avail->slot[avail->curr].clock - 1) {
-            zabbix_log(LOG_LEVEL_INFORMATION,
+            zabbix_log(LOG_LEVEL_DEBUG,
                 "[ANALYZER/AVAIL%d] ready, "
                 "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f",
                 interval, avail->itemid, avail->slot[avail->prev].clock,
                 avail->slot[avail->prev].progress, avail->slot[avail->prev].avail);
 
             if (avail->slot[avail->prev].avail > interval) {
-                zabbix_log(LOG_LEVEL_INFORMATION,
+                zabbix_log(LOG_LEVEL_DEBUG,
                         "[ANALYZER/AVAIL%d] avail exceeds interval - fixing, "
                         "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f",
                         interval, avail->itemid, avail->slot[avail->prev].clock,
@@ -1289,7 +1289,7 @@ static void analyzer_avail_check(zbx_hashset_t *analyzer_avail, int interval) {
             (avail->slot[avail->curr].clock != 0 && avail->slot[avail->curr].clock < now - obsolete_interval) ||
             (avail->slot[avail->prev].clock != 0 && avail->slot[avail->prev].clock < now - obsolete_interval))
         {
-            zabbix_log(LOG_LEVEL_INFORMATION,
+            zabbix_log(LOG_LEVEL_DEBUG,
                 "[ANALYZER/AVAIL%d] dropping obsolete entry, "
                 "itemid: " ZBX_FS_UI64 ", clock: %d, progress: %d, avail: %f",
                 interval, avail->itemid, avail->slot[avail->prev].clock,
@@ -1546,7 +1546,7 @@ void DCmass_flush_analyzer() {
     LOCK_ANALYZER_AVAIL_Q;
     
     if (0 < cache->analyzer_avail_q_num) {
-        zabbix_log(LOG_LEVEL_INFORMATION, 
+        zabbix_log(LOG_LEVEL_DEBUG, 
                 "[%s]#%d: DCmass_flush_analyzer: analyzer_avail_q_num: %d",
         process_type_str, process_num, cache->analyzer_avail_q_num);
         analyzer_metrics_num = cache->analyzer_avail_q_num < BATCH_MAX_SIZE
@@ -1572,19 +1572,19 @@ void DCmass_flush_analyzer() {
         queue_msg(qctx, &jp, NULL, CONFIG_TARGET_AVAIL);
         zbx_json_free(&j);
         sec2 = zbx_time() - sec2;
-        zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: queue send: " 
+        zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: queue send: " 
             ZBX_FS_DBL " seconds", process_type_str, process_num, sec2);
     }
 #else
     // TODO
-    zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: discarding analyzer metrics data - not sending to queue",
+    zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: discarding analyzer metrics data - not sending to queue",
             process_type_str, process_num);
 #endif
 
     zbx_free(analyzer_metrics);
     
     sec = zbx_time() - sec;
-    zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: DCmass_flush_analyzer: " 
+    zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: DCmass_flush_analyzer: " 
         ZBX_FS_DBL " seconds", process_type_str, process_num, sec);
 }
 
@@ -1685,7 +1685,7 @@ void DCmass_flush_trends() {
     
     LOCK_TRENDS_DB;
     
-    zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: DCmass_flush_trends: trends_num_db: %d",
+    zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: DCmass_flush_trends: trends_num_db: %d",
         process_type_str, process_num, cache->trends_num_db);
     if (0 < cache->trends_num_db) {
         trends_num = cache->trends_num_db;
@@ -1706,7 +1706,7 @@ void DCmass_flush_trends() {
         queue_msg(qctx, &jp, NULL, CONFIG_TARGET_TRENDS);
         zbx_json_free(&j);
         sec2 = zbx_time() - sec2;
-        zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: queue send: " 
+        zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: queue send: " 
             ZBX_FS_DBL " seconds", process_type_str, process_num, sec2);
     }
 #endif
@@ -1724,7 +1724,7 @@ void DCmass_flush_trends() {
     zbx_free(trends);
     
     sec = zbx_time() - sec;
-    zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: DCmass_flush_trends: " 
+    zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: DCmass_flush_trends: " 
         ZBX_FS_DBL " seconds", process_type_str, process_num, sec);
 }
 
@@ -3142,31 +3142,31 @@ int	DCsync_history(int sync_type)
             sec = zbx_time();
             DCmass_update_items(history, history_num);
             sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: sync %d, DCmass_update_items: " 
+            zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: sync %d, DCmass_update_items: " 
                 ZBX_FS_DBL " seconds", process_type_str, process_num, syncs, sec);
             
             sec = zbx_time();    
             DCmass_add_history(history, history_num);
             sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: sync %d, DCmass_add_history: " 
+            zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: sync %d, DCmass_add_history: " 
                 ZBX_FS_DBL " seconds", process_type_str, process_num, syncs, sec);
             
             sec = zbx_time(); 
             DCmass_update_triggers(history, history_num);
             sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: sync %d, DCmass_update_triggers: " 
+            zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: sync %d, DCmass_update_triggers: " 
                 ZBX_FS_DBL " seconds", process_type_str, process_num, syncs, sec);
 
             sec = zbx_time();
             DCmass_update_trends(history, history_num);
             sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: sync %d, DCmass_update_trends: " 
+            zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: sync %d, DCmass_update_trends: " 
                 ZBX_FS_DBL " seconds", process_type_str, process_num, syncs, sec);
             
             sec = zbx_time();
             DCmass_analyze(history, history_num);
             sec = zbx_time() - sec;
-            zabbix_log(LOG_LEVEL_INFORMATION, "[%s]#%d: sync %d, DCmass_analyze: " 
+            zabbix_log(LOG_LEVEL_DEBUG, "[%s]#%d: sync %d, DCmass_analyze: " 
                 ZBX_FS_DBL " seconds", process_type_str, process_num, syncs, sec);
 		}
 		else
