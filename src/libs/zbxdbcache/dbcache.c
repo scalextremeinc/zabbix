@@ -1191,7 +1191,7 @@ static void analyzer_avail_store(zbx_hashset_t *analyzer_avail, int fd, char *fi
 
         count++;
     }
-    zabbix_log(LOG_LEVEL_INFORMATION,
+    zabbix_log(LOG_LEVEL_DEBUG,
             "[ANALYZER/AVAIL] Saved availability, count: %d, file: %s", count, filename);
     goto out;
 
