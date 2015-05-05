@@ -1,5 +1,5 @@
 FROM centos:7
-RUN yum install -y tar mysql mysql-devel gcc gcc-c++ make
+RUN yum install -y tar wget mysql mysql-devel gcc gcc-c++ make
 
 RUN useradd zabbix
 RUN mkdir /opt/zabbix
