@@ -19,7 +19,7 @@
 # Mandatory: no
 # Range: 1024-32767
 # Default:
-ListenPort=8443
+# ListenPort=10051
 
 ### Option: SourceIP
 #	Source IP address for outgoing connections.
@@ -36,7 +36,7 @@ ListenPort=8443
 # Default:
 # LogFile=
 
-LogFile=/volume/log/zabbix_server.log
+LogFile=/tmp/zabbix_server.log
 
 ### Option: LogFileSize
 #	Maximum size of log file in MB.
@@ -45,7 +45,7 @@ LogFile=/volume/log/zabbix_server.log
 # Mandatory: no
 # Range: 0-1024
 # Default:
-LogFileSize=50
+# LogFileSize=1
 
 ### Option: DebugLevel
 #	Specifies debug level
@@ -58,14 +58,14 @@ LogFileSize=50
 # Mandatory: no
 # Range: 0-4
 # Default:
-DebugLevel=3
+# DebugLevel=3
 
 ### Option: PidFile
 #	Name of PID file.
 #
 # Mandatory: no
 # Default:
-PidFile=/volume/run/zabbix_server.pid
+# PidFile=/tmp/zabbix_server.pid
 
 ### Option: DBHost
 #	Database host name.
@@ -74,7 +74,7 @@ PidFile=/volume/run/zabbix_server.pid
 #
 # Mandatory: no
 # Default:
-DBHost=MYSQL_PORT_3306_TCP_ADDR
+# DBHost=localhost
 
 ### Option: DBName
 #	Database name.
@@ -108,7 +108,7 @@ DBUser=root
 #
 # Mandatory: no
 # Default:
-DBPassword=MYSQL_ENV_MYSQL_ROOT_PASSWORD
+# DBPassword=
 
 ### Option: DBSocket
 #	Path to MySQL socket.
@@ -133,7 +133,7 @@ DBPassword=MYSQL_ENV_MYSQL_ROOT_PASSWORD
 # Mandatory: no
 # Range: 0-1000
 # Default:
-StartPollers=1
+# StartPollers=5
 
 ### Option: StartIPMIPollers
 #	Number of pre-forked instances of IPMI pollers.
@@ -157,7 +157,7 @@ StartPollers=1
 # Mandatory: no
 # Range: 0-1000
 # Default:
-StartTrappers=1
+# StartTrappers=5
 
 ### Option: StartPingers
 #	Number of pre-forked instances of ICMP pingers.
@@ -240,7 +240,7 @@ StartTrappers=1
 # Mandatory: no
 # Range: 1-24
 # Default:
-HousekeepingFrequency=1
+# HousekeepingFrequency=1
 
 ### Option: MaxHousekeeperDelete
 #	The table "housekeeper" contains "tasks" for housekeeping procedure in the format:
@@ -253,7 +253,7 @@ HousekeepingFrequency=1
 # Mandatory: no
 # Range: 0-1000000
 # Default:
-MaxHousekeeperDelete=500
+# MaxHousekeeperDelete=500
 
 ### Option: DisableHousekeeping
 #	If set to 1, disables housekeeping.
@@ -261,12 +261,7 @@ MaxHousekeeperDelete=500
 # Mandatory: no
 # Range: 0-1
 # Default:
-DisableHousekeeping=0
-
-# whether house keeper should delete hitory using single query or loop throught items
-HousekeeperSingleQuery=1
-# housekeeper sleep time between deletes
-HousekeeperSleep=1
+# DisableHousekeeping=0
 
 ### Option: SenderFrequency
 #	How often Zabbix will try to send unsent alerts (in seconds).
@@ -299,8 +294,7 @@ HousekeeperSleep=1
 # Mandatory: no
 # Range: 1-100
 # Default:
-StartDBSyncers=1
-StartDBSyncersTrends=1
+# StartDBSyncers=4
 
 ### Option: HistoryCacheSize
 #	Size of history cache, in bytes.
@@ -318,8 +312,7 @@ StartDBSyncersTrends=1
 # Mandatory: no
 # Range: 128K-1G
 # Default:
-TrendCacheSize=4M
-TrendDbCacheSize=2M
+# TrendCacheSize=4M
 
 ### Option: HistoryTextCacheSize
 #	Size of text history cache, in bytes.
@@ -362,7 +355,7 @@ TrendDbCacheSize=2M
 # Mandatory: no
 # Range: 1-300
 # Default:
-TrapperTimeout=300
+# TrapperTimeout=300
 
 ### Option: UnreachablePeriod
 #	After how many seconds of unreachability treat a host as unavailable.
@@ -480,24 +473,3 @@ TrapperTimeout=300
 # Range: 1-3600
 # Default:
 # ProxyDataFrequency=1
-
-ZmqQueueAddress=ROUTER_QUEUE_ADDR
-ZmqErrQueueAddress=ERROR_QUEUE_ADDR
-ZmqQueueRecoveryDir=/volume/recovery
-ZmqQueueDaoc=1
-
-TimeFix=1
-TriggersHisotry=1
-TrendsSqlWrite=0
-TrapperProcessingLimit=1000
-
-AnalyzerAvailUptimesCacheSize=8M
-AnalyzerAvailPingsCacheSize=8M
-AnalyzerAvailQueueCacheSize=16M
-AnalyzerAvailInterval1=300
-AnalyzerAvailInterval2=900
-
-Target=tsdb
-TargetTrends=tsdb
-TargetAvail=tsdb
-

@@ -33,3 +33,12 @@ AnalyzerAvailPingFreq - lenght in seconds of maximum gap between two datapoints,
     analyzer starts considering particular metric as showing unavailability
 TargetTrends - tag marking trends sent to queue
 TargetAvail - tag marking availability sent to queue
+
+Docker:
+docker build -t zabbix .
+
+docker run --name mysql0 -v /opt/docker/mysql/data:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=docker123 -p 127.0.0.1:3306:3306 -d mysql:5.6
+
+docker run --name zabbix0 --link mysql0:mysql -p 8443:8443 -e ROUTER_QUEUE_ADDR=tcp://127.0.0.1:9901,tcp://127.0.0.1:9903 -e ERROR_QUEUE_ADDR=tcp://127.0.0.1:8801 -d zabbix:latest
+
+docker run --link mysql0:mysql -e QUEUE_ADDR=tcp://127.0.0.1:9901,tcp://127.0.0.1:9903 -e ERROR_QUEUE_ADDR=tcp://127.0.0.1:8801 -it --rm zabbix:latest /bin/bash
