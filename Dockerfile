@@ -30,6 +30,10 @@ RUN yum clean all
 
 ADD ./conf/zabbix_server.conf /opt/zabbix/
 ADD ./database/mysql/zabbix_schema.sql /opt/zabbix/
+ADD ./alertscripts /etc/zabbix/alertscripts/
+RUN chmod go+rx /etc/zabbix/alertscripts/*
+
+ENV ALERTSCRIPTS=/etc/zabbix/alertscripts EXTERNALSCRIPTS=/etc/zabbix/externalscripts
 
 VOLUME /volume
 EXPOSE 8443
