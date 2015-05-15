@@ -34,11 +34,20 @@ touch /volume/log/zabbix_server.log
 chown -R zabbix:zabbix /volume/*
 
 # merge with docker --link variables
-merge_vars ERR_QUEUE_ADDR ERR_QUEUE_PORT_8801_TCP "tcp://localhost:8801"
+if [ ! -z $ERR_QUEUE_PORT_8801_TCP_PORT ]; then
+    ERR_QUEUE_LINK="tcp://err_queue:$ERR_QUEUE_PORT_8801_TCP_PORT"
+fi
+merge_vars ERR_QUEUE_ADDR ERR_QUEUE_LINK
 
 # merge with docker --link variables (assuming 2 queue processes per queue container)
-merge_vars ROUTER_QUEUE_ADDR QUEUE_PORT_6601_TCP
-merge_vars ROUTER_QUEUE_ADDR QUEUE_PORT_6603_TCP "tcp://localhost:6601,tcp://localhost:6603"
+if [ ! -z $QUEUE_PORT_6601_TCP_PORT ]; then
+    QUEUE1_LINK="tcp://queue:$QUEUE_PORT_6601_TCP"
+fi
+if [ ! -z $QUEUE_PORT_6603_TCP_PORT ]; then
+    QUEUE2_LINK="tcp://queue:$QUEUE_PORT_6603_TCP"
+fi
+merge_vars ROUTER_QUEUE_ADDR QUEUE1_LINK
+merge_vars ROUTER_QUEUE_ADDR QUEUE2_LINK
 
 CONF=/opt/zabbix/zabbix_server.conf
 
