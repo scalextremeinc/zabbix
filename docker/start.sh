@@ -41,10 +41,10 @@ merge_vars ERR_QUEUE_ADDR ERR_QUEUE_LINK
 
 # merge with docker --link variables (assuming 2 queue processes per queue container)
 if [ ! -z $QUEUE_PORT_6601_TCP_PORT ]; then
-    QUEUE1_LINK="tcp://queue:$QUEUE_PORT_6601_TCP"
+    QUEUE1_LINK="tcp://queue:$QUEUE_PORT_6601_TCP_PORT"
 fi
 if [ ! -z $QUEUE_PORT_6603_TCP_PORT ]; then
-    QUEUE2_LINK="tcp://queue:$QUEUE_PORT_6603_TCP"
+    QUEUE2_LINK="tcp://queue:$QUEUE_PORT_6603_TCP_PORT"
 fi
 merge_vars ROUTER_QUEUE_ADDR QUEUE1_LINK
 merge_vars ROUTER_QUEUE_ADDR QUEUE2_LINK
