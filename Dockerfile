@@ -13,6 +13,7 @@ RUN ./configure
 RUN make
 RUN make install
 RUN echo "/usr/local/lib" >> /etc/ld.so.conf
+RUN ldconfig
 
 ADD . /opt/zabbix/src/zabbix
 WORKDIR /opt/zabbix/src/zabbix
