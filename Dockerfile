@@ -20,10 +20,6 @@ RUN ./configure --enable-server --with-mysql --enable-queue
 RUN make
 RUN cp /opt/zabbix/src/zabbix/src/zabbix_server/zabbix_server /opt/zabbix/
 
-# reduce container size
-RUN yum erase -y mysql-devel gcc gcc-c++ make
-RUN yum clean all
-
 ADD ./conf/zabbix_server.conf /opt/zabbix/
 ADD ./database/mysql/zabbix_schema.sql /opt/zabbix/
 ADD ./alertscripts /etc/zabbix/alertscripts/
