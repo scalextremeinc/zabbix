@@ -39,6 +39,7 @@ AGENT_VALUE
 	char		*value;
 	char		*source;
 	zbx_uint64_t	lastlogsize;
+	zbx_uint64_t	ruleid;
 	int		mtime;
 	int		timestamp;
 	int		severity;

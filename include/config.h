@@ -122,7 +122,7 @@
 /* #undef HAVE_KVM_H */
 
 /* Define to 1 if you have the <lber.h> header file. */
-/* #undef HAVE_LBER_H */
+#define HAVE_LBER_H 1
 
 /* Define to 1 if LDAP should be enabled. */
 /* #undef HAVE_LDAP */
@@ -212,7 +212,7 @@
 /* #undef HAVE_NET_IF_MIB_H */
 
 /* Define to 1 if you have the <nlist.h> header file. */
-/* #undef HAVE_NLIST_H */
+#define HAVE_NLIST_H 1
 
 /* Define to 1 if ODBC Driver Manager should be used. */
 /* #undef HAVE_ODBC */

@@ -58,6 +58,8 @@ update_file $CONF ERR_QUEUE_ADDR
 update_file $CONF ALERTSCRIPTS
 update_file $CONF EXTERNALSCRIPTS
 
+MYSQL_PORT_3306_TCP_PORT=${MYSQL_PORT_3306_TCP_PORT:-3306}
+
 mysql -h"$MYSQL_PORT_3306_TCP_ADDR" -P"$MYSQL_PORT_3306_TCP_PORT" -uroot -p"$MYSQL_ENV_MYSQL_ROOT_PASSWORD" < /opt/zabbix/zabbix_schema.sql
 
 /opt/zabbix/zabbix_server -c $CONF && tail -F /volume/log/zabbix_server.log

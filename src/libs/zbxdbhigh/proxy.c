@@ -1448,7 +1448,7 @@ void	process_mass_data(zbx_sock_t *sock, zbx_uint64_t proxy_hostid,
 	for (i = 0; i < value_num; i++)
 	{
 		if (SUCCEED != DCconfig_get_item_by_key(&item, proxy_hostid, values[i].host_name, values[i].key, skip_calculated_item)) {
-            DCcreate_item(values[i].key, proxy_hostid, values[i].host_name);
+            DCcreate_item(&values[i], proxy_hostid);
             continue;
         }
 
@@ -1652,6 +1652,13 @@ int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
 			if (SUCCEED != is_uint64(tmp, &av->lastlogsize))
 				av->lastlogsize = 0;
 		}
+
+		if (SUCCEED == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_RULEID, &tmp, &tmp_alloc)) {
+			if (SUCCEED != is_uint64(tmp, &av->ruleid))
+				av->ruleid = 0;
+		} else {
+            av->ruleid = 0;
+        }
 
 		if (SUCCEED == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_MTIME, &tmp, &tmp_alloc))
 			av->mtime = atoi(tmp);

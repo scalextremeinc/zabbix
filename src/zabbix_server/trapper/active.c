@@ -267,6 +267,37 @@ static void	add_regexp_name(char ***regexp, int *regexp_alloc, int *regexp_num, 
 	}
 }
 
+static void add_win_counter_rules(struct zbx_json *json,
+        zbx_uint64_t hostid, char **sql, size_t *sql_alloc) {
+
+    size_t sql_offset = 0;
+	DB_RESULT result;
+	DB_ROW row;
+
+	zbx_snprintf_alloc(sql, sql_alloc, &sql_offset,
+        "select r.ruleid, r.pattern1, r.pattern2, r.aggregator "
+        "from rules as r, applications as a where a.hostid=%d and a.name=r.app "
+        "and r.ruleid not in (select ruleid from items where hostid=a.hostid)",
+        hostid);
+
+	result = DBselect("%s", *sql);
+	zbx_json_addarray(json, ZBX_PROTO_TAG_COUNTERS);
+	while (NULL != (row = DBfetch(result))) {
+        zbx_json_addobject(json, NULL);
+
+        zbx_json_addstring(json, ZBX_PROTO_TAG_RULEID, row[0], ZBX_JSON_TYPE_INT);
+        zbx_json_addstring(json, ZBX_PROTO_TAG_PATTERN1, row[1], ZBX_JSON_TYPE_STRING);
+        zbx_json_addstring(json, ZBX_PROTO_TAG_PATTERN2, row[2], ZBX_JSON_TYPE_STRING);
+        zbx_json_addstring(json, ZBX_PROTO_TAG_AGGREGATOR, row[3], ZBX_JSON_TYPE_STRING);
+
+        zbx_json_close(json);
+    }
+    zbx_json_close(json);
+
+    DBfree_result(result);
+
+}
+
 /******************************************************************************
  *                                                                            *
  * Function: send_list_of_active_checks_json                                  *
@@ -507,6 +538,8 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
     }
 	
     zbx_json_close(&json);
+
+    add_win_counter_rules(&json, hostid, &sql, &sql_alloc);
     
 	if (0 != regexp_num)
 	{
