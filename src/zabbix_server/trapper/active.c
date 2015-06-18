@@ -275,9 +275,10 @@ static void add_win_counter_rules(struct zbx_json *json,
 	DB_ROW row;
 
 	zbx_snprintf_alloc(sql, sql_alloc, &sql_offset,
-        "select r.ruleid, r.pattern1, r.pattern2, r.aggregator "
-        "from rules as r, applications as a where a.hostid=%d and a.name=r.app "
-        "and r.ruleid not in (select ruleid from items where hostid=a.hostid)",
+        "SELECT r.ruleid, r.pattern1, r.pattern2, r.aggregator "
+        "FROM rules AS r, applications AS a WHERE a.hostid=%d "
+        "AND a.name=r.app AND a.os=r.os AND r.ruleid NOT IN "
+        "(SELECT ruleid FROM items WHERE hostid=a.hostid)",
         hostid);
 
 	result = DBselect("%s", *sql);
