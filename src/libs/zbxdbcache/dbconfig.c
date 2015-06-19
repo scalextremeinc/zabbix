@@ -4856,23 +4856,23 @@ int DCcreate_item(AGENT_VALUE *agent_value, zbx_uint64_t proxy_hostid) {
         goto exit;
     }
 
-
-    zbx_mutex_lock(&autocreate_mutex);
-
-    autocreate = find_autocreate(agent_value->key);
-
-    if (NULL == autocreate) {
-
-        zbx_mutex_unlock(&autocreate_mutex);
-        goto exit_sem;
-
+    if (ruleid > 0) {
+        // Items created from counter rules have common prefix in autocreate
+        // table, so app name for such item has to be pulled from rules table.
+        result = DBselect("select app from rules where ruleid=" ZBX_FS_UI64, ruleid);
+        row = DBfetch(result);
+        app_name = zbx_strdup(NULL, row[0]);
+        DBfree_result(result);
     } else {
-
+        zbx_mutex_lock(&autocreate_mutex);
+        if (NULL == (autocreate = find_autocreate(agent_value->key))) {
+            zbx_mutex_unlock(&autocreate_mutex);
+            goto exit_sem;
+        }
         app_name = (char*) malloc(MAX_NAME_LEN);
         memcpy(app_name, autocreate->app, autocreate->app_len);
         app_name[autocreate->app_len] = '\0';
         delta = autocreate->delta;
-
         zbx_mutex_unlock(&autocreate_mutex);
     }
     
