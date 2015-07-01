@@ -4814,7 +4814,6 @@ int DCcreate_item(AGENT_VALUE *agent_value, zbx_uint64_t proxy_hostid) {
     static const int delay = 60;
     static const int data_type = 0;
     static const int type = 7;
-    static const char *units = "";
     static const char *delay_flex = "";
     static const char *trapper_hosts = "";
     static const char *logtimefmt = "";
@@ -4844,7 +4843,9 @@ int DCcreate_item(AGENT_VALUE *agent_value, zbx_uint64_t proxy_hostid) {
     char *sql = NULL;
     char *app;
     char *app_name = NULL;
+    char *key = NULL;
     char *name = NULL;
+    char *units = NULL;
     int delta;
     int ret = -1;
 
@@ -4856,12 +4857,18 @@ int DCcreate_item(AGENT_VALUE *agent_value, zbx_uint64_t proxy_hostid) {
         goto exit;
     }
 
+    key = zbx_dyn_escape_string(agent_value->key, "\\");
     if (ruleid > 0) {
         // Items created from counter rules have common prefix in autocreate
         // table, so app name for such item has to be pulled from rules table.
-        result = DBselect("select app from rules where ruleid=" ZBX_FS_UI64, ruleid);
+        result = DBselect("select app, pattern1, pattern2, units from rules "
+                "where ruleid=" ZBX_FS_UI64, ruleid);
         row = DBfetch(result);
         app_name = zbx_strdup(NULL, row[0]);
+        // build item name
+        name = zbx_malloc(name, 256);
+        zbx_snprintf(name, 256, "%s %s", row[1], row[2]);
+        units = zbx_strdup(NULL, row[3]);
         DBfree_result(result);
     } else {
         zbx_mutex_lock(&autocreate_mutex);
@@ -4874,6 +4881,8 @@ int DCcreate_item(AGENT_VALUE *agent_value, zbx_uint64_t proxy_hostid) {
         app_name[autocreate->app_len] = '\0';
         delta = autocreate->delta;
         zbx_mutex_unlock(&autocreate_mutex);
+        name = zbx_strdup(NULL, key);
+        units = zbx_strdup(NULL, "");
     }
     
     LOCK_CACHE;    
@@ -4928,7 +4937,6 @@ int DCcreate_item(AGENT_VALUE *agent_value, zbx_uint64_t proxy_hostid) {
     }
     
     sql = zbx_malloc(sql, sql_alloc);
-    name = zbx_dyn_escape_string(agent_value->key, "\\");
 
     result = DBselect("select collectorid from items where hostid=" ZBX_FS_UI64 " and key_='%s.scalextreme.placeholder.alpha' limit 1", host->hostid, app_name);
     if (NULL != (row = DBfetch(result)) && NULL != row[0]) {
@@ -4936,12 +4944,12 @@ int DCcreate_item(AGENT_VALUE *agent_value, zbx_uint64_t proxy_hostid) {
         DBfree_result(result);
         zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
             "insert into items"
-            " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
+            " (itemid,name,description,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
                 "logtimefmt,ipmi_sensor,snmp_community,snmp_oid,port,snmpv3_securityname,"
                 "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey,collectorid,delta,ruleid)"
-            " values (" ZBX_FS_UI64 ",'%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
+            " values (" ZBX_FS_UI64 ",'%s','%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
             "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s', " ZBX_FS_UI64 ",%d,"ZBX_FS_UI64")",
-            itemid, name, name, host->hostid, type, value_type, data_type, delay,
+            itemid, name, name, key, host->hostid, type, value_type, data_type, delay,
             delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
             port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
             password, publickey, privatekey, collectorid, delta, ruleid);
@@ -4949,12 +4957,12 @@ int DCcreate_item(AGENT_VALUE *agent_value, zbx_uint64_t proxy_hostid) {
         DBfree_result(result);
         zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
             "insert into items"
-            " (itemid,name,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
+            " (itemid,name,description,key_,hostid,type,value_type,data_type,delay,delay_flex,trapper_hosts,units,"
                 "logtimefmt,ipmi_sensor,snmp_community,snmp_oid,port,snmpv3_securityname,"
                 "snmpv3_authpassphrase,snmpv3_privpassphrase,username,password,publickey,privatekey,delta,ruleid)"
-            " values (" ZBX_FS_UI64 ",'%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
+            " values (" ZBX_FS_UI64 ",'%s','%s','%s'," ZBX_FS_UI64 ",%d,%d,%d,%d,"
             "'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s',%d,"ZBX_FS_UI64")",
-            itemid, name, name, host->hostid, type, value_type, data_type, delay,
+            itemid, name, name, key, host->hostid, type, value_type, data_type, delay,
             delay_flex, trapper_hosts, units, logtimefmt, ipmi_sensor, snmp_community, snmp_oid,
             port, snmpv3_securityname, snmpv3_authpassphrase, snmpv3_privpassphrase, username,
             password, publickey, privatekey, delta, ruleid);
@@ -4979,7 +4987,9 @@ exit_sem:
 exit:
     zbx_free(sql);
     zbx_free(app_name);
+    zbx_free(key);
     zbx_free(name);
+    zbx_free(units);
     //zabbix_log(LOG_LEVEL_DEBUG, "[AUTOCREATE] Return status: %d", ret);
     return ret;
 }
