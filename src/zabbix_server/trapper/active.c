@@ -299,6 +299,36 @@ static void add_win_counter_rules(struct zbx_json *json,
 
 }
 
+static void add_collectors(struct zbx_json *json,
+        zbx_uint64_t hostid, char **sql, size_t *sql_alloc) {
+
+    size_t sql_offset = 0;
+	DB_RESULT result;
+	DB_ROW row;
+
+	zbx_snprintf_alloc(sql, sql_alloc, &sql_offset,
+        "SELECT c.id, c.path, c.parameters, c.mtime, c.app "
+        "FROM collectors AS c, applications AS a WHERE a.hostid=%d "
+        "AND a.name=c.app", hostid);
+
+	result = DBselect("%s", *sql);
+	zbx_json_addarray(json, ZBX_PROTO_TAG_COLLECTORS);
+	while (NULL != (row = DBfetch(result))) {
+        zbx_json_addobject(json, NULL);
+
+        zbx_json_addstring(json, ZBX_PROTO_TAG_COLLECTORID, row[0], ZBX_JSON_TYPE_INT);
+        zbx_json_addstring(json, ZBX_PROTO_TAG_PATH, row[1], ZBX_JSON_TYPE_STRING);
+        zbx_json_addjson(json, ZBX_PROTO_TAG_PARAMETERS, row[2]);
+        zbx_json_addstring(json, ZBX_PROTO_TAG_MTIME, row[3], ZBX_JSON_TYPE_INT);
+        zbx_json_addstring(json, ZBX_PROTO_TAG_APP, row[4], ZBX_JSON_TYPE_STRING);
+
+        zbx_json_close(json);
+    }
+    zbx_json_close(json);
+
+    DBfree_result(result);
+}
+
 /******************************************************************************
  *                                                                            *
  * Function: send_list_of_active_checks_json                                  *
@@ -364,12 +394,13 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
 	name_esc = DBdyn_escape_string(host);
 
 	zbx_snprintf_alloc(&sql, &sql_alloc, &sql_offset,
-			"select i.key_,i.delay,i.lastlogsize,i.mtime,i.collectorid,c.path,c.parameters,c.mtime"
-			" from items i LEFT JOIN collectors c ON (c.id=i.collectorid), hosts h"
+			"select i.key_,i.delay,i.lastlogsize,i.mtime"
+			" from items i, hosts h"
 			" where i.hostid=h.hostid"
 				" and h.status=%d"
 				" and i.type=%d"
 				" and i.flags<>%d"
+                " and i.collectorid is null"
 				" and h.hostid=" ZBX_FS_UI64
 				" and h.proxy_hostid is null",
 			HOST_STATUS_MONITORED,
@@ -401,7 +432,6 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
 	result = DBselect("%s", sql);
 
     unsigned long prev_id = 0, current_id, collector_mtime;
-    char close_item_json = 0;
     int skip_calculated_item = 0;
 	while (NULL != (row = DBfetch(result)))
 	{
@@ -417,58 +447,6 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
 		substitute_key_macros(&key, &dc_item.host, NULL, MACRO_TYPE_ITEM_KEY, NULL, 0);
 
 		DCconfig_clean_items(&dc_item, NULL, 1);
-        
-        // collector items
-        if (NULL != row[4]) {
-            // skip item with bad collectorid
-            if (NULL == row[5]) {
-                zbx_free(key);
-                continue;
-            }
-            current_id = atol(row[4]);
-            if (prev_id != current_id) {
-                if (close_item_json) {
-                    // close last item metrics array
-                    zbx_json_close(&json);
-                    // close item object
-                    zbx_json_close(&json);
-                    close_item_json = 0;
-                }
-                if (NULL != row[7])
-                    collector_mtime = atol(row[7]);
-                else
-                    collector_mtime = 0;
-                zbx_json_addobject(&json, NULL);
-                zbx_snprintf(params, MAX_STRING_LEN, "collector[%d-%d]", current_id, collector_mtime);
-                zbx_json_addstring(&json, ZBX_PROTO_TAG_KEY, params, ZBX_JSON_TYPE_STRING);
-                zbx_json_addstring(&json, ZBX_PROTO_TAG_DELAY, row[1], ZBX_JSON_TYPE_INT);
-                // The agent expects ALWAYS to have lastlogsize and mtime tags.
-                // Removing those would cause older agents to fail.
-                zbx_json_addstring(&json, ZBX_PROTO_TAG_LOGLASTSIZE, row[2], ZBX_JSON_TYPE_INT);
-                zbx_json_addstring(&json, ZBX_PROTO_TAG_MTIME, row[3], ZBX_JSON_TYPE_INT);
-                zbx_json_addobject(&json, "collector");
-                zbx_json_addstring(&json, "command", row[5], ZBX_JSON_TYPE_STRING);
-                zbx_json_addjson(&json, "parameters", row[6]);
-                zbx_json_close(&json);
-                zbx_json_addarray(&json, "metrics");
-                zbx_json_addstring(&json, NULL, key, ZBX_JSON_TYPE_STRING);
-            } else {
-                zbx_json_addstring(&json, NULL, key, ZBX_JSON_TYPE_STRING);
-            }
-            
-            prev_id = current_id;
-            close_item_json = 1;
-            
-            zbx_free(key);
-            continue;
-        }
-        if (close_item_json) {
-            // close last item metrics array
-            zbx_json_close(&json);
-            // close item object
-            zbx_json_close(&json);
-            close_item_json = 0;
-        }
 
 		zbx_json_addobject(&json, NULL);
 		zbx_json_addstring(&json, ZBX_PROTO_TAG_KEY, key, ZBX_JSON_TYPE_STRING);
@@ -529,18 +507,11 @@ int	send_list_of_active_checks_json(zbx_sock_t *sock, struct zbx_json_parse *jp)
 	}
     
     DBfree_result(result);
-    
-    if (close_item_json) {
-        // close last item metrics array
-        zbx_json_close(&json);
-        // close item object
-        zbx_json_close(&json);
-        close_item_json = 0;
-    }
 	
     zbx_json_close(&json);
 
     add_win_counter_rules(&json, hostid, &sql, &sql_alloc);
+    add_collectors(&json, hostid, &sql, &sql_alloc);
     
 	if (0 != regexp_num)
 	{

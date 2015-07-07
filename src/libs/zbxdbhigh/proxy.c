@@ -1530,6 +1530,7 @@ static void	clean_agent_values(AGENT_VALUE *values, int value_num)
 	{
 		zbx_free(values[i].value);
 		zbx_free(values[i].source);
+		zbx_free(values[i].app);
 	}
 }
 
@@ -1660,6 +1661,13 @@ int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
             av->ruleid = 0;
         }
 
+		if (SUCCEED == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_COLLECTORID, &tmp, &tmp_alloc)) {
+			if (SUCCEED != is_uint64(tmp, &av->collectorid))
+				av->collectorid = 0;
+		} else {
+            av->collectorid = 0;
+        }
+
 		if (SUCCEED == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_MTIME, &tmp, &tmp_alloc))
 			av->mtime = atoi(tmp);
 
@@ -1668,6 +1676,9 @@ int	process_hist_data(zbx_sock_t *sock, struct zbx_json_parse *jp,
 
 		if (SUCCEED == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_LOGSOURCE, &tmp, &tmp_alloc))
 			av->source = strdup(tmp);
+
+		if (SUCCEED == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_APP, &tmp, &tmp_alloc))
+			av->app = strdup(tmp);
 
 		if (SUCCEED == zbx_json_value_by_name_dyn(&jp_row, ZBX_PROTO_TAG_LOGSEVERITY, &tmp, &tmp_alloc))
 			av->severity = atoi(tmp);

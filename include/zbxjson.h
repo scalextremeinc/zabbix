@@ -70,6 +70,12 @@
 #define ZBX_PROTO_TAG_PATTERN2		"pattern2"
 #define ZBX_PROTO_TAG_AGGREGATOR	"aggregator"
 
+#define ZBX_PROTO_TAG_COLLECTORS	"collectors"
+#define ZBX_PROTO_TAG_COLLECTORID	"collectorid"
+#define ZBX_PROTO_TAG_PATH          "path"
+#define ZBX_PROTO_TAG_PARAMETERS    "parameters"
+#define ZBX_PROTO_TAG_APP           "app"
+
 #define ZBX_PROTO_VALUE_FAILED		"failed"
 #define ZBX_PROTO_VALUE_SUCCESS		"success"
 

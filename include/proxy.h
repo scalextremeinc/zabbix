@@ -38,8 +38,10 @@ AGENT_VALUE
 	char		key[ITEM_KEY_LEN * 4 + 1];
 	char		*value;
 	char		*source;
+	char		*app;
 	zbx_uint64_t	lastlogsize;
 	zbx_uint64_t	ruleid;
+	zbx_uint64_t	collectorid;
 	int		mtime;
 	int		timestamp;
 	int		severity;
