@@ -4,7 +4,7 @@ RUN yum install -y tar wget mysql mysql-devel gcc gcc-c++ make
 RUN useradd zabbix
 RUN mkdir /opt/zabbix
 
-ENV ALERTSCRIPTS=/etc/zabbix/alertscripts EXTERNALSCRIPTS=/etc/zabbix/externalscripts
+ENV ALERTSCRIPTS=/etc/zabbix/alertscripts EXTERNALSCRIPTS=/etc/zabbix/externalscripts LOG_DIR=/volume/log 
 VOLUME /volume
 EXPOSE 8443
 
@@ -25,7 +25,7 @@ RUN ./configure --enable-server --with-mysql --enable-queue
 RUN make
 RUN cp /opt/zabbix/src/zabbix/src/zabbix_server/zabbix_server /opt/zabbix/
 
-ADD ./conf/zabbix_server.conf /opt/zabbix/
+ADD ./docker/zabbix_server.conf /opt/zabbix/
 ADD ./database/mysql/zabbix_schema.sql /opt/zabbix/
 ADD ./alertscripts /etc/zabbix/alertscripts/
 ADD ./docker/start.sh /opt/zabbix/
