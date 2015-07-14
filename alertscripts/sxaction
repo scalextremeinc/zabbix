@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# get script dir
+pushd `dirname $0` > /dev/null
+SCRIPTPATH=`pwd -P`
+popd > /dev/null
+
+# another way to get script dir (requires realpath)
+# SCRIPT=`realpath $0`
+# SCRIPTPATH=`dirname $SCRIPT`
+
+$SCRIPTPATH/sxaction.py "$1" "$2" "$3" &
