@@ -307,9 +307,9 @@ static void add_collectors(struct zbx_json *json,
 	DB_ROW row;
 
 	zbx_snprintf_alloc(sql, sql_alloc, &sql_offset,
-        "SELECT c.id, c.path, c.parameters, c.mtime, c.app "
+        "SELECT c.id, c.path, c.parameters, c.mtime, a.name "
         "FROM collectors AS c, applications AS a WHERE a.hostid=%d "
-        "AND a.name=c.app", hostid);
+        "AND a.applicationid=c.applicationid", hostid);
 
 	result = DBselect("%s", *sql);
 	zbx_json_addarray(json, ZBX_PROTO_TAG_COLLECTORS);
