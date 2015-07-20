@@ -10,6 +10,7 @@ except ImportError:
 
 
 def sxemail(store_host, store_user, store_pass, subject, message):
+    logging.info('Email, subject: %s, message: %.200s ...', subject, message)
     ent = {
         'template': 'monitor_diagnostics',
         'organizationId': 0,
@@ -40,11 +41,10 @@ def sxemail(store_host, store_user, store_pass, subject, message):
 
 if __name__ == '__main__':
     log_dir = os.environ.get('LOG_DIR', '/var/log')
-    log_file = log_dir + '/sxemail.log'
-    logging.basicConfig(filename=log_file, level=logging.DEBUG,
+    log_file = os.path.join(log_dir, 'sxaction.log')
+    log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+    logging.basicConfig(filename=log_file, level=logging.getLevelName(log_level),
             format='%(levelname)s - %(asctime)s - %(name)s - %(message)s')
-
-    logging.info('Email script called, cmd line args: %s', sys.argv)
 
     store_host = os.environ.get('STOREIP', 'STOREIP_ENV_MISSING')
     store_user = os.environ.get('STOREUSER', 'STOREUSER_ENV_MISSING')

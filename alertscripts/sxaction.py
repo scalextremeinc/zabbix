@@ -5,6 +5,7 @@ import sys
 import httplib, urllib
 
 def sxaction(monitor_host, monitor_user, monitor_pass, action_payload):
+    logging.info('Action, payload: %.120s ...', action_payload)
     params = urllib.urlencode({
         'username': monitor_user,
         'password': monitor_pass,
@@ -27,11 +28,10 @@ def sxaction(monitor_host, monitor_user, monitor_pass, action_payload):
 
 if __name__ == '__main__':
     log_dir = os.environ.get('LOG_DIR', '/var/log')
-    log_file = log_dir + '/sxaction.log'
-    logging.basicConfig(filename=log_file, level=logging.DEBUG,
+    log_file = os.path.join(log_dir, 'sxaction.log')
+    log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+    logging.basicConfig(filename=log_file, level=logging.getLevelName(log_level),
             format='%(levelname)s - %(asctime)s - %(name)s - %(message)s')
-
-    logging.info('Action script called, cmd line args: %s', sys.argv)
 
     monitor_host = os.environ.get('MONITORIP', 'MONITORIP_ENV_MISSING')
     monitor_user = os.environ.get('MONITORUSER', 'MONITORUSER_ENV_MISSING')
