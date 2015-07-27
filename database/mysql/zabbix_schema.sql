@@ -211,6 +211,7 @@ CREATE TABLE `collectors` (
   `path` varchar(1024) NOT NULL,
   `parameters` text,
   `mtime` int(10) unsigned NOT NULL DEFAULT '0',
+  `applicationid` bigint(20) unsigned NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=MyISAM AUTO_INCREMENT=4 DEFAULT CHARSET=utf8;
 /*!40101 SET character_set_client = @saved_cs_client */;
