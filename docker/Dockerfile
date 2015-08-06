@@ -33,4 +33,4 @@ RUN chmod go+rx /etc/zabbix/alertscripts/*
 
 WORKDIR /opt/zabbix
 
-CMD /opt/zabbix/start.sh
+CMD ["/opt/zabbix/start.sh"]

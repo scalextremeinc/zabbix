@@ -189,7 +189,7 @@ static void	parent_signal_handler(int sig, siginfo_t *siginfo, void *context)
  * Comments: it doesn't allow running under 'root' if allow_root is zero      *
  *                                                                            *
  ******************************************************************************/
-int	daemon_start(int allow_root)
+int	daemon_start(int allow_root, int nodaemon)
 {
 	pid_t			pid;
 	struct passwd		*pwd;
@@ -236,29 +236,31 @@ int	daemon_start(int allow_root)
 #endif
 	}
 
-	if (0 != (pid = zbx_fork()))
-		exit(0);
+    if (!nodaemon) {
+        if (0 != (pid = zbx_fork()))
+            exit(0);
 
-	setsid();
+        setsid();
 
-	signal(SIGHUP, SIG_IGN);
+        signal(SIGHUP, SIG_IGN);
 
-	if (0 != (pid = zbx_fork()))
-		exit(0);
+        if (0 != (pid = zbx_fork()))
+            exit(0);
 
-	if (-1 == chdir("/"))	/* this is to eliminate warning: ignoring return value of chdir */
-		assert(0);
+        if (-1 == chdir("/"))	/* this is to eliminate warning: ignoring return value of chdir */
+            assert(0);
 
-	umask(0002);
+        umask(0002);
 
-	redirect_std(CONFIG_LOG_FILE);
+        redirect_std(CONFIG_LOG_FILE);
 
-	if (FAIL == create_pid_file(CONFIG_PID_FILE))
-		exit(FAIL);
+        if (FAIL == create_pid_file(CONFIG_PID_FILE))
+            exit(FAIL);
+    }
 
-	atexit(daemon_stop);
+    atexit(daemon_stop);
 
-	parent_pid = (int)getpid();
+    parent_pid = (int)getpid();
 
 	phan.sa_sigaction = child_signal_handler;
 	sigemptyset(&phan.sa_mask);

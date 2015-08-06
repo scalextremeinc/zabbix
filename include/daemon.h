@@ -30,7 +30,7 @@ extern char	*CONFIG_PID_FILE;
 
 #include "threads.h"
 
-int	daemon_start(int allow_root);
+int	daemon_start(int allow_root, int nodaemon);
 void	daemon_stop();
 
 int	zbx_sigusr_send(zbx_task_t task);

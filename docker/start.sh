@@ -33,21 +33,8 @@ touch /volume/log/zabbix_server.log
 
 chown -R zabbix:zabbix /volume/*
 
-# merge with docker --link variables
-if [ ! -z $ERR_QUEUE_PORT_8801_TCP_PORT ]; then
-    ERR_QUEUE_LINK="tcp://err_queue:$ERR_QUEUE_PORT_8801_TCP_PORT"
-fi
-merge_vars ERR_QUEUE_ADDR ERR_QUEUE_LINK
-
-# merge with docker --link variables (assuming 2 queue processes per queue container)
-if [ ! -z $QUEUE_PORT_6601_TCP_PORT ]; then
-    QUEUE1_LINK="tcp://queue:$QUEUE_PORT_6601_TCP_PORT"
-fi
-if [ ! -z $QUEUE_PORT_6603_TCP_PORT ]; then
-    QUEUE2_LINK="tcp://queue:$QUEUE_PORT_6603_TCP_PORT"
-fi
-merge_vars ROUTER_QUEUE_ADDR QUEUE1_LINK
-merge_vars ROUTER_QUEUE_ADDR QUEUE2_LINK
+merge_vars ERR_QUEUE_ADDR SPARK_ERROR_QUEUE_PORT
+merge_vars ROUTER_QUEUE_ADDR SPARK_QUEUE_PORT
 
 CONF=/opt/zabbix/zabbix_server.conf
 
@@ -63,4 +50,4 @@ MYSQL_PORT_3306_TCP_PORT=${MYSQL_PORT_3306_TCP_PORT:-3306}
 
 mysql -h"$MYSQL_PORT_3306_TCP_ADDR" -P"$MYSQL_PORT_3306_TCP_PORT" -uroot -p"$MYSQL_ENV_MYSQL_ROOT_PASSWORD" < /opt/zabbix/zabbix_schema.sql
 
-/opt/zabbix/zabbix_server -c $CONF && tail -F /volume/log/zabbix_server.log
+exec /opt/zabbix/zabbix_server --nodaemon -c $CONF

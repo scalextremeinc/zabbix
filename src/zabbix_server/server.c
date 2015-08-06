@@ -74,6 +74,7 @@ const char	*help_message[] = {
 	"Other options:",
 	"  -h --help                       Give this help",
 	"  -V --version                    Display version number",
+	"  -d --nodaemon                   Don't daemonize",
 	NULL	/* end of text */
 };
 
@@ -87,11 +88,12 @@ static struct zbx_option	longopts[] =
 	{"runtime-control",	1,	NULL,	'R'},
 	{"help",		0,	NULL,	'h'},
 	{"version",		0,	NULL,	'V'},
+	{"nodaemon",	0,	NULL,	'd'},
 	{NULL}
 };
 
 /* short options */
-static char	shortopts[] = "c:n:hVR:";
+static char	shortopts[] = "c:n:hVR:d";
 
 /* end of COMMAND LINE OPTIONS */
 
@@ -536,6 +538,7 @@ int	main(int argc, char **argv)
 	zbx_task_t	task = ZBX_TASK_START;
 	char		ch = '\0';
 	int		nodeid = 0;
+    int     nodaemon = 0;
 
 	progname = get_program_name(argv[0]);
 
@@ -546,6 +549,9 @@ int	main(int argc, char **argv)
 		{
 			case 'c':
 				CONFIG_FILE = zbx_strdup(CONFIG_FILE, zbx_optarg);
+				break;
+			case 'd':
+				nodaemon = 1;
 				break;
 			case 'R':
 				if (0 == strcmp(zbx_optarg, ZBX_CONFIG_CACHE_RELOAD))
@@ -599,7 +605,7 @@ int	main(int argc, char **argv)
 			break;
 	}
 
-	return daemon_start(CONFIG_ALLOW_ROOT);
+    return daemon_start(CONFIG_ALLOW_ROOT, nodaemon);
 }
 
 int	MAIN_ZABBIX_ENTRY()
