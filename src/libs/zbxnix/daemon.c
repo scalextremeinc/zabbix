@@ -239,27 +239,19 @@ int	daemon_start(int allow_root, int nodaemon)
     if (!nodaemon) {
         if (0 != (pid = zbx_fork()))
             exit(0);
-
         setsid();
-
         signal(SIGHUP, SIG_IGN);
-
         if (0 != (pid = zbx_fork()))
             exit(0);
-
         if (-1 == chdir("/"))	/* this is to eliminate warning: ignoring return value of chdir */
             assert(0);
-
-        umask(0002);
-
-        redirect_std(CONFIG_LOG_FILE);
-
-        if (FAIL == create_pid_file(CONFIG_PID_FILE))
-            exit(FAIL);
     }
 
+    umask(0002);
+    redirect_std(CONFIG_LOG_FILE);
+    if (FAIL == create_pid_file(CONFIG_PID_FILE))
+        exit(FAIL);
     atexit(daemon_stop);
-
     parent_pid = (int)getpid();
 
 	phan.sa_sigaction = child_signal_handler;

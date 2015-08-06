@@ -48,6 +48,8 @@ update_file $CONF LOG_DIR
 
 MYSQL_PORT_3306_TCP_PORT=${MYSQL_PORT_3306_TCP_PORT:-3306}
 
+echo "Trying to create zabbix db schema..."
 mysql -h"$MYSQL_PORT_3306_TCP_ADDR" -P"$MYSQL_PORT_3306_TCP_PORT" -uroot -p"$MYSQL_ENV_MYSQL_ROOT_PASSWORD" < /opt/zabbix/zabbix_schema.sql
 
+echo "Starting zabbix server"
 exec /opt/zabbix/zabbix_server --nodaemon -c $CONF
