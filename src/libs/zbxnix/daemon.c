@@ -245,10 +245,10 @@ int	daemon_start(int allow_root, int nodaemon)
             exit(0);
         if (-1 == chdir("/"))	/* this is to eliminate warning: ignoring return value of chdir */
             assert(0);
+        umask(0002);
+        redirect_std(CONFIG_LOG_FILE);
     }
 
-    umask(0002);
-    redirect_std(CONFIG_LOG_FILE);
     if (FAIL == create_pid_file(CONFIG_PID_FILE))
         exit(FAIL);
     atexit(daemon_stop);
