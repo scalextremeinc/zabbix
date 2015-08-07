@@ -9,4 +9,4 @@ popd > /dev/null
 # SCRIPT=`realpath $0`
 # SCRIPTPATH=`dirname $SCRIPT`
 
-$SCRIPTPATH/sxaction.py "$1" "$2" "$3" &
+exec $SCRIPTPATH/sxaction.py "$1" "$2" "$3"
