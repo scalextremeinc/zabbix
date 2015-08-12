@@ -10,10 +10,10 @@ EXPOSE 8443
 
 RUN mkdir -p /opt/zabbix/src/zmq
 WORKDIR /opt/zabbix/src/zmq
-RUN wget http://download.zeromq.org/zeromq-3.2.5.tar.gz
-RUN tar xf zeromq-3.2.5.tar.gz
-WORKDIR /opt/zabbix/src/zmq/zeromq-3.2.5
-RUN ./configure
+RUN wget http://download.zeromq.org/zeromq-4.1.2.tar.gz
+RUN tar xf zeromq-4.1.2.tar.gz
+WORKDIR /opt/zabbix/src/zmq/zeromq-4.1.2
+RUN ./configure --without-libsodium 
 RUN make
 RUN make install
 RUN echo "/usr/local/lib" >> /etc/ld.so.conf
