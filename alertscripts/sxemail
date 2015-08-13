@@ -2,15 +2,23 @@
 import logging
 import os
 import sys 
-import httplib, urllib
+import urllib
+import urllib2
 try:
     import json
 except ImportError:
     import simplejson as json
 
+LOG = logging.getLogger(__name__)
 
-def sxemail(store_host, store_user, store_pass, subject, message):
-    logging.info('Email, subject: %s, message: %.200s ...', subject, message)
+REQUEST_HEADERS = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    "Accept": "text/plain"}
+
+def sxemail(url, user, passwd, subject, message):
+    if not LOG.isEnabledFor(logging.DEBUG):
+        LOG.info('Email, subject: %s, message: %.200s ...', subject, message)
+
     ent = {
         'template': 'monitor_diagnostics',
         'organizationId': 0,
@@ -19,37 +27,32 @@ def sxemail(store_host, store_user, store_pass, subject, message):
         'subject': subject,
         'message': message
     }
-    params = urllib.urlencode({
-        'username': store_user,
-        'password': store_pass,
+    data = urllib.urlencode({
+        'username': user,
+        'password': passwd,
         'ent': json.dumps(ent)
     })
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "text/plain"}
-    url_path = "/actmgnt/emailnotifier"
 
-    logging.debug('Request POST, url: https://%s%s, headers: %s, body: %s',
-            store_host, url_path, headers, params)
+    LOG.debug('Request, url: %s, data: %s', url, data)
 
-    conn = httplib.HTTPSConnection(store_host)
-    conn.request("POST", url_path, params, headers)
-    response = conn.getresponse()
-    body = response.read()
-    logging.debug('Response, code: %s %s, headers: %s, body: %s',
-           response.status, response.reason, response.getheaders(), body)
+    request = urllib2.Request(url, data, REQUEST_HEADERS)
+    response = urllib2.urlopen(request)
+
+    if LOG.isEnabledFor(logging.DEBUG):
+        LOG.debug('Response, code: %s, data: %s',
+                response.getcode(), response.read())
 
 if __name__ == '__main__':
     log_dir = os.environ.get('LOG_DIR', '/var/log')
-    log_file = os.path.join(log_dir, 'sxaction.log')
-    log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+    log_file = os.path.join(log_dir, 'sxemail.log')
+    log_level = os.environ.get('ACTION_LOG_LEVEL', 'INFO').upper()
     logging.basicConfig(filename=log_file, level=logging.getLevelName(log_level),
             format='%(levelname)s - %(asctime)s - %(name)s - %(message)s')
 
-    store_host = os.environ.get('STOREIP', 'STOREIP_ENV_MISSING')
-    store_user = os.environ.get('STOREUSER', 'STOREUSER_ENV_MISSING')
-    store_pass = os.environ.get('STOREPASS', 'STOREPASS_ENV_MISSING')
+    sx_email_url = os.environ.get('SX_EMAIL_URL', 'SX_EMAIL_URL_ENV_MISSING')
+    sx_user = os.environ.get('SX_USER', 'SX_USER_ENV_MISSING')
+    sx_pass = os.environ.get('SX_PASS', 'SX_PASS_ENV_MISSING')
     subject = sys.argv[2]
     message = sys.argv[3]
     
-    sxemail(store_host, store_user, store_pass, subject, message)
+    sxemail(sx_email_url, sx_user, sx_pass, subject, message)
