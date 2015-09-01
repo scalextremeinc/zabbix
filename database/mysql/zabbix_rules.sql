@@ -1,6 +1,6 @@
 ALTER TABLE `items` ADD COLUMN `ruleid` bigint(20) unsigned DEFAULT 0 NOT NULL;
 ALTER TABLE `applications` ADD COLUMN `os` varchar(255) DEFAULT '';
-ALTER TABLE `collectors` ADD COLUMN `applicationid` bigint(20) unsigned NOT NULL,
+ALTER TABLE `collectors` ADD COLUMN `applicationid` bigint(20) unsigned NOT NULL;
 
 -- MySQL dump 10.13  Distrib 5.1.73, for redhat-linux-gnu (x86_64)
 --
